@@ -1,0 +1,6 @@
+{
+  "name": "Zonguldak Tenis Deniz Spor Kulübü Defi Ligi",
+  "description": "Zonguldak Tenis Deniz Spor Kulübü 14 Yaş(+) Tek Erkekler ve Tek Kadınlar Defi Ligi resmi yönetim, sıralama ve skor takip portalı.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

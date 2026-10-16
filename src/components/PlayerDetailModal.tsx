@@ -17,7 +17,7 @@ import {
   User,
   Sparkles,
 } from 'lucide-react';
-import { validateChallengeRules } from '../utils/defiRules';
+import { validateChallenge } from '../utils/defiRules';
 
 interface PlayerDetailModalProps {
   player: Player | null;
@@ -60,7 +60,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
 
   // Challenge eligibility (only for logged-in players who are not the player itself and not admin)
   const challengeCheck = currentUser && !isAdmin && !isMe
-    ? validateChallengeRules(currentUser, player, matches, players)
+    ? validateChallenge(currentUser, player, matches)
     : null;
 
   return (

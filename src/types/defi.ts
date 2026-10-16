@@ -47,6 +47,9 @@ export interface Player {
   password: string; // Admin tarafından belirlenir, oyuncu girişinde kullanılır
   isExcused?: boolean; // Mazeretli mi (Madde 10: sınav, seyahat, sakatlık)
   excuseReason?: string;
+  excuseStartDate?: string; // YYYY-MM-DD
+  excuseEndDate?: string; // YYYY-MM-DD
+  excuseNotes?: string;
   isNewJoiner?: boolean; // Madde 11: 11. sıra ve altına meydan okuyarak lige giren
   matchesPlayed: number;
   wins: number;

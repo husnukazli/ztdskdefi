@@ -15,9 +15,10 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
   selectedPlayer,
   setSelectedPlayer,
 }) => {
-  const { players, matches, currentCategory, currentUser } = useDefi();
+  const { players, matches, currentCategory, currentUser, theme } = useDefi();
   const [search, setSearch] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'playoff' | 'active'>('all');
+  const isLight = theme === 'light';
 
   const categoryPlayers = players
     .filter((p) => p.category === currentCategory)
@@ -127,10 +128,14 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
             <div
               key={player.id}
               onClick={() => setSelectedPlayer(player)}
-              className={`bg-slate-900 border rounded-2xl p-4 space-y-3 cursor-pointer hover:border-sky-500/50 hover:shadow-xl hover:shadow-sky-950/30 transition group relative ${
-                isMe
+              className={`border rounded-2xl p-4 space-y-3 cursor-pointer transition group relative ${
+                isLight
+                  ? isMe
+                    ? 'border-emerald-500 bg-emerald-50/70 shadow-sm'
+                    : 'border-slate-200 bg-white hover:border-sky-400 hover:shadow-md'
+                  : isMe
                   ? 'border-emerald-500/60 bg-emerald-950/20'
-                  : 'border-slate-800'
+                  : 'border-slate-800 bg-slate-900 hover:border-sky-500/50 hover:shadow-xl'
               }`}
             >
               {/* Header */}
@@ -144,15 +149,17 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
                     {player.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-xs group-hover:text-sky-400 transition flex items-center gap-1.5">
+                    <h3 className={`font-bold text-xs transition flex items-center gap-1.5 ${
+                      isLight ? 'text-slate-950 group-hover:text-sky-700' : 'text-white group-hover:text-sky-400'
+                    }`}>
                       <span>{player.name}</span>
                       {isMe && (
-                        <span className="text-[10px] bg-emerald-900/60 text-emerald-300 px-1.5 rounded font-bold">
+                        <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-300 px-1.5 rounded font-bold border border-emerald-300 dark:border-emerald-700">
                           Siz
                         </span>
                       )}
                     </h3>
-                    <div className="text-[11px] text-slate-400">{player.phone}</div>
+                    <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>ZTDSK Defi Üyesi</div>
                   </div>
                 </div>
 
@@ -202,16 +209,18 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
                   </span>
                 )}
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChallengePlayer(player);
-                  }}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-slate-950 text-slate-300 transition flex items-center gap-1 cursor-pointer"
-                >
-                  <Swords className="w-3.5 h-3.5" />
-                  <span>Teklif Et</span>
-                </button>
+                {!isAdmin && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChallengePlayer(player);
+                    }}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-slate-950 text-slate-300 transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Swords className="w-3.5 h-3.5" />
+                    <span>Teklif Et</span>
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -242,10 +251,7 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-400" />
-                      {selectedPlayer.phone}
-                    </span>
+                    <span className="text-emerald-400 font-semibold">ZTDSK Defi Ligi Üyesi</span>
                     <span>•</span>
                     <span>Lige Katılım: {selectedPlayer.joinedDate}</span>
                   </p>
@@ -287,8 +293,8 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
                 </div>
               </div>
 
-              {/* Challenge Button & Validation Banner */}
-              {currentUser && currentUser.id !== selectedPlayer.id && (
+              {/* Challenge Button & Validation Banner (Only for players) */}
+              {currentUser && !isAdmin && currentUser.id !== selectedPlayer.id && (
                 <div className="space-y-2">
                   {validationForSelected && !validationForSelected.canChallenge ? (
                     <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-rose-300 text-xs">

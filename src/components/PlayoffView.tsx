@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDefi } from '../context/DefiContext';
 import { Award, Trophy, Sparkles, Shuffle, Calendar, CheckCircle2, ChevronRight, Medal } from 'lucide-react';
 import { Player } from '../types/defi';
+import { PlayoffDrawModal } from './PlayoffDrawModal';
 
 export const PlayoffView: React.FC = () => {
   const { players, currentCategory, settings } = useDefi();
@@ -16,22 +17,37 @@ export const PlayoffView: React.FC = () => {
   const pot5to8 = top12.slice(4, 8); // 5, 6, 7, 8
   const pot9to12 = top12.slice(8, 12); // 9, 10, 11, 12
 
-  // Simulated draw state
-  const [hasDrawnRound1, setHasDrawnRound1] = useState<boolean>(false);
-  const [round1Matches, setRound1Matches] = useState<Array<{ p1: Player; p2: Player }>>([]);
+  // Draw modal state
+  const [isDrawModalOpen, setIsDrawModalOpen] = useState<boolean>(false);
 
-  const handleDrawRound1 = () => {
-    // Shuffle 5-8 against 9-12
-    const shuffled5to8 = [...pot5to8].sort(() => Math.random() - 0.5);
-    const shuffled9to12 = [...pot9to12].sort(() => Math.random() - 0.5);
+  // Simulated draw state with localStorage persistence
+  const [round1Matches, setRound1Matches] = useState<Array<{ p1: Player; p2: Player }>>(() => {
+    try {
+      const saved = localStorage.getItem(`ztdsk_playoff_draw_${currentCategory}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-    const matches = shuffled5to8.map((p, i) => ({
-      p1: p,
-      p2: shuffled9to12[i] || pot9to12[0],
-    }));
+  const hasDrawnRound1 = round1Matches.length > 0;
 
-    setRound1Matches(matches);
-    setHasDrawnRound1(true);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`ztdsk_playoff_draw_${currentCategory}`);
+      setRound1Matches(saved ? JSON.parse(saved) : []);
+    } catch {
+      setRound1Matches([]);
+    }
+  }, [currentCategory]);
+
+  const handleCompleteDraw = (drawn: Array<{ p1: Player; p2: Player }>) => {
+    setRound1Matches(drawn);
+    try {
+      localStorage.setItem(`ztdsk_playoff_draw_${currentCategory}`, JSON.stringify(drawn));
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -55,7 +71,7 @@ export const PlayoffView: React.FC = () => {
         </div>
 
         <button
-          onClick={handleDrawRound1}
+          onClick={() => setIsDrawModalOpen(true)}
           className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-950/60 cursor-pointer self-start md:self-auto"
         >
           <Shuffle className="w-4 h-4" />
@@ -272,6 +288,16 @@ export const PlayoffView: React.FC = () => {
         </div>
         <span className="font-semibold text-emerald-400">Zonguldak Tenis Deniz Spor Kulübü</span>
       </div>
+
+      {/* Playoff 1. Tur Draw Modal with Confirmation and Live Lottery Animation */}
+      <PlayoffDrawModal
+        isOpen={isDrawModalOpen}
+        onClose={() => setIsDrawModalOpen(false)}
+        pot5to8={pot5to8}
+        pot9to12={pot9to12}
+        onCompleteDraw={handleCompleteDraw}
+        isRedraw={hasDrawnRound1}
+      />
     </div>
   );
 };

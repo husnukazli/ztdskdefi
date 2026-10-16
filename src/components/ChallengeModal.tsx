@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Player } from '../types/defi';
 import { useDefi } from '../context/DefiContext';
-import { validateChallenge, buildWhatsAppChallengeUrl } from '../utils/defiRules';
-import { X, AlertTriangle, CheckCircle, MessageSquare, Calendar, Clock, MapPin, Send, Info } from 'lucide-react';
+import { validateChallenge, buildWhatsAppChallengeUrl, buildWhatsAppGroupShareUrl, buildChallengeMessageText } from '../utils/defiRules';
+import { X, AlertTriangle, CheckCircle, MessageSquare, Calendar, Clock, MapPin, Send, Info, Copy, Users } from 'lucide-react';
 
 interface ChallengeModalProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
   const [challengerId, setChallengerId] = useState<string>(currentUser?.id || '');
   const [matchDate, setMatchDate] = useState<string>('2026-10-15');
   const [matchTime, setMatchTime] = useState<string>('18:00');
-  const [court, setCourt] = useState<string>('Merkez Kort');
+  const [court, setCourt] = useState<string>('A Kortu (Sert Kort)');
   const [notes, setNotes] = useState<string>('');
   const [showScheduleForm, setShowScheduleForm] = useState<boolean>(false);
 
@@ -37,11 +37,18 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
     ? validateChallenge(challenger, targetPlayer, matches, '2026-10-14')
     : { canChallenge: false, reason: 'Lütfen teklifte bulunmak için önce oyuncu seçiniz veya giriş yapınız.' };
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsAppGroup = () => {
     if (!challenger) return;
-    const url = buildWhatsAppChallengeUrl(challenger, targetPlayer, targetPlayer.phone);
+    const url = buildWhatsAppGroupShareUrl(challenger, targetPlayer);
     window.open(url, '_blank');
-    showToast(`${targetPlayer.name} için WhatsApp defi mesajı oluşturuldu.`, 'success');
+    showToast(`WhatsApp açılıyor: ZTDSK Defi Ligi Grubunu seçerek teklifi gönderebilirsiniz.`, 'success');
+  };
+
+  const handleCopyMessage = () => {
+    if (!challenger) return;
+    const text = buildChallengeMessageText(challenger, targetPlayer);
+    navigator.clipboard.writeText(text);
+    showToast('Resmi teklif metni kopyalandı! WhatsApp grubuna yapıştırabilirsiniz.', 'success');
   };
 
   const handleConfirmSchedule = (e: React.FormEvent) => {
@@ -172,6 +179,22 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
             </div>
           )}
 
+          {/* Friendly WhatsApp Message Preview */}
+          {challenger && validation.canChallenge && (
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-emerald-500/30 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                  Gruba Gönderilecek Maç Teklifi Mesajı:
+                </span>
+                <span className="text-[10px] text-slate-500">ZTDSK Grubu</span>
+              </div>
+              <div className="p-2.5 bg-slate-900 rounded-lg text-xs font-sans text-slate-200 border border-slate-800 leading-relaxed whitespace-pre-line">
+                {buildChallengeMessageText(challenger, targetPlayer)}
+              </div>
+            </div>
+          )}
+
           {/* Rule Reminders */}
           <div className="bg-slate-950/50 border border-slate-800 p-3.5 rounded-xl space-y-1.5 text-xs text-slate-300">
             <div className="font-semibold text-slate-200 flex items-center gap-1.5">
@@ -194,7 +217,7 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
           {/* Action Buttons */}
           <div className="space-y-2 pt-2">
             <button
-              onClick={handleSendWhatsApp}
+              onClick={handleSendWhatsAppGroup}
               disabled={!validation.canChallenge}
               className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
                 validation.canChallenge
@@ -202,19 +225,31 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
-              <span>WhatsApp ile Defi Teklifi İlet ({targetPlayer.phone})</span>
+              <Users className="w-4 h-4" />
+              <span>WhatsApp Grubunda Meydan Oku / Paylaş</span>
             </button>
 
             {validation.canChallenge && (
-              <button
-                type="button"
-                onClick={() => setShowScheduleForm(!showScheduleForm)}
-                className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition cursor-pointer"
-              >
-                <Calendar className="w-4 h-4 text-sky-400" />
-                <span>{showScheduleForm ? 'Takvim Formunu Gizle' : 'Anlaşılan Tarihi Sisteme & Takvime Ekle'}</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyMessage}
+                  className="py-2 px-3 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  title="Resmi teklif metnini panoya kopyala"
+                >
+                  <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Metni Kopyala</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleForm(!showScheduleForm)}
+                  className="py-2 px-3 rounded-xl font-semibold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                  <span>{showScheduleForm ? 'Formu Kapat' : 'Takvime Kaydet'}</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -262,10 +297,9 @@ export const ChallengeModal: React.FC<ChallengeModalProps> = ({
                   onChange={(e) => setCourt(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
                 >
-                  <option value="Merkez Kort">Merkez Kort (Toprak)</option>
-                  <option value="Kort 1 (Toprak)">Kort 1 (Toprak)</option>
-                  <option value="Kort 2 (Sert Zemin)">Kort 2 (Sert Zemin)</option>
-                  <option value="Kort 3 (Işıklandırmalı)">Kort 3 (Işıklandırmalı)</option>
+                  <option value="A Kortu (Sert Kort)">A Kortu (Sert Kort)</option>
+                  <option value="B Kortu (Sert Kort)">B Kortu (Sert Kort)</option>
+                  <option value="C Kortu (Sert Kort)">C Kortu (Sert Kort)</option>
                 </select>
               </div>
 

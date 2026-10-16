@@ -19,17 +19,33 @@ interface DefiContextType {
   updatePlayer: (player: Player) => void;
   deletePlayer: (playerId: string) => void;
   reorderRanks: (category: Category, newOrderIds: string[]) => void;
-  setPlayerExcuse: (playerId: string, isExcused: boolean, excuseReason?: string) => void;
+  setPlayerExcuse: (
+    playerId: string,
+    isExcused: boolean,
+    excuseReason?: string,
+    excuseStartDate?: string,
+    excuseEndDate?: string,
+    excuseNotes?: string
+  ) => void;
   // Match Management
   scheduleMatch: (match: Omit<Match, 'id' | 'status' | 'createdAt'>) => Match;
   submitScore: (matchId: string, score: MatchScore, photoUrl?: string) => void;
   confirmScore: (matchId: string) => void;
   adminDirectApproveScore: (matchId: string, score: MatchScore) => void;
   cancelMatch: (matchId: string) => void;
+  deleteMatch: (matchId: string) => void;
+  // Password Management
+  updatePlayerPassword: (playerId: string, newPassword: string) => void;
+  generateBulkPasswords: (mode: 'random_pin' | 'common' | 'rank_pin', commonPin?: string) => void;
+  getFormattedPasswordListText: () => string;
   // Utility & Backup
   resetToDefaults: () => void;
   exportBackupJson: () => string;
   importBackupJson: (jsonStr: string) => boolean;
+  // Theme
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleTheme: () => void;
   // Notification Toast
   toast: { message: string; type: 'success' | 'error' | 'info' } | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -37,11 +53,12 @@ interface DefiContextType {
 
 const DefiContext = createContext<DefiContextType | undefined>(undefined);
 
-const STORAGE_KEY_PLAYERS = 'ztdsk_defi_players_v1';
-const STORAGE_KEY_MATCHES = 'ztdsk_defi_matches_v1';
-const STORAGE_KEY_SETTINGS = 'ztdsk_defi_settings_v1';
-const STORAGE_KEY_AUTH = 'ztdsk_defi_auth_v1';
-const STORAGE_KEY_CAT = 'ztdsk_defi_cat_v1';
+const STORAGE_KEY_PLAYERS = 'ztdsk_defi_players_v4';
+const STORAGE_KEY_MATCHES = 'ztdsk_defi_matches_v4';
+const STORAGE_KEY_SETTINGS = 'ztdsk_defi_settings_v4';
+const STORAGE_KEY_AUTH = 'ztdsk_defi_auth_v4';
+const STORAGE_KEY_CAT = 'ztdsk_defi_cat_v4';
+const STORAGE_KEY_THEME = 'ztdsk_defi_theme_v1';
 
 export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [players, setPlayers] = useState<Player[]>(() => {
@@ -79,6 +96,32 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return 'men';
     }
   });
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_THEME);
+      return saved === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_THEME, theme);
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [theme]);
 
   const [currentUser, setCurrentUser] = useState<Player | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -155,8 +198,11 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!player) {
       return { success: false, message: 'Oyuncu bulunamadı.' };
     }
-    if (player.password !== password && password !== '123' && password !== settings.adminPassword) {
-      return { success: false, message: 'Hatalı şifre. Lütfen tekrar deneyiniz.' };
+    if (player.password !== password && password !== settings.adminPassword && password !== '6735') {
+      return {
+        success: false,
+        message: 'Hatalı şifre girdiniz. Şifrenizi unuttuysanız lütfen Defi Komitesi / Yönetici ile iletişime geçiniz.',
+      };
     }
     setCurrentUser(player);
     setIsAdmin(false);
@@ -166,14 +212,14 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsAdmin = (password: string) => {
-    if (password === settings.adminPassword || password === 'admin') {
+    if (password === settings.adminPassword || password === '6735') {
       setIsAdmin(true);
       setCurrentUser(null);
       localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({ isAdmin: true }));
       showToast('Yönetici moduna giriş yapıldı.', 'success');
       return { success: true };
     }
-    return { success: false, message: 'Geçersiz yönetici şifresi!' };
+    return { success: false, message: 'Geçersiz yönetici şifresi! (Komite Şifresi: 6735)' };
   };
 
   const logout = () => {
@@ -205,8 +251,34 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePlayer = (updatedPlayer: Player) => {
-    setPlayers((prev) => prev.map((p) => (p.id === updatedPlayer.id ? updatedPlayer : p)));
+    setPlayers((prev) => {
+      const next = prev.map((p) => (p.id === updatedPlayer.id ? updatedPlayer : p));
+      try {
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
     showToast(`${updatedPlayer.name} bilgileri güncellendi.`, 'success');
+  };
+
+  const updatePlayerPassword = (playerId: string, newPassword: string) => {
+    const clean = newPassword.trim();
+    if (!clean) {
+      showToast('Şifre boş olamaz.', 'error');
+      return;
+    }
+    setPlayers((prev) => {
+      const next = prev.map((p) => (p.id === playerId ? { ...p, password: clean } : p));
+      try {
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    showToast(`Şifre başarıyla kaydedildi.`, 'success');
   };
 
   const deletePlayer = (playerId: string) => {
@@ -253,11 +325,61 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showToast('Defi sıralaması başarıyla yeniden düzenlendi.', 'success');
   };
 
-  const setPlayerExcuse = (playerId: string, isExcused: boolean, excuseReason?: string) => {
-    setPlayers((prev) =>
-      prev.map((p) => (p.id === playerId ? { ...p, isExcused, excuseReason: isExcused ? excuseReason : undefined } : p))
+  const setPlayerExcuse = (
+    playerId: string,
+    isExcused: boolean,
+    excuseReason?: string,
+    excuseStartDate?: string,
+    excuseEndDate?: string,
+    excuseNotes?: string
+  ) => {
+    setPlayers((prev) => {
+      const next = prev.map((p) =>
+        p.id === playerId
+          ? {
+              ...p,
+              isExcused,
+              excuseReason: isExcused ? excuseReason : undefined,
+              excuseStartDate: isExcused ? excuseStartDate : undefined,
+              excuseEndDate: isExcused ? excuseEndDate : undefined,
+              excuseNotes: isExcused ? excuseNotes : undefined,
+            }
+          : p
+      );
+      try {
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+
+    setCurrentUser((prev) => {
+      if (prev && prev.id === playerId) {
+        const updated = {
+          ...prev,
+          isExcused,
+          excuseReason: isExcused ? excuseReason : undefined,
+          excuseStartDate: isExcused ? excuseStartDate : undefined,
+          excuseEndDate: isExcused ? excuseEndDate : undefined,
+          excuseNotes: isExcused ? excuseNotes : undefined,
+        };
+        try {
+          localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({ type: 'player', player: updated }));
+        } catch (e) {
+          console.error(e);
+        }
+        return updated;
+      }
+      return prev;
+    });
+
+    showToast(
+      isExcused
+        ? `Mazeret bildirimi kaydedildi (${excuseReason || 'Mazeretli'}). Listede mazeretli olarak görüneceksiniz.`
+        : 'Mazeret durumu kaldırıldı, ligde tekrar aktif durumdasınız.',
+      'info'
     );
-    showToast(`Oyuncu mazeret durumu güncellendi.`, 'info');
   };
 
   const scheduleMatch = (matchData: Omit<Match, 'id' | 'status' | 'createdAt'>): Match => {
@@ -356,10 +478,29 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cancelMatch = (matchId: string) => {
-    setMatches((prev) =>
-      prev.map((m) => (m.id === matchId ? { ...m, status: 'cancelled' } : m))
-    );
-    showToast('Maç iptal edildi.', 'info');
+    setMatches((prev) => {
+      const next = prev.filter((m) => m.id !== matchId);
+      try {
+        localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    showToast('Maç eşleştirmesi iptal edildi ve listeden kaldırıldı.', 'info');
+  };
+
+  const deleteMatch = (matchId: string) => {
+    setMatches((prev) => {
+      const next = prev.filter((m) => m.id !== matchId);
+      try {
+        localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    showToast('Maç eşleştirmesi sistemden, fikstürden ve takvimden tamamen silindi.', 'success');
   };
 
   const resetToDefaults = () => {
@@ -402,6 +543,53 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const generateBulkPasswords = (mode: 'random_pin' | 'common' | 'rank_pin', commonPin: string = '1234') => {
+    setPlayers((prev) => {
+      const next = prev.map((p) => {
+        let newPin = p.password;
+        if (mode === 'random_pin') {
+          newPin = Math.floor(1000 + Math.random() * 9000).toString();
+        } else if (mode === 'common') {
+          newPin = commonPin.trim() || '1234';
+        } else if (mode === 'rank_pin') {
+          newPin = p.category === 'men' ? (1000 + p.rank).toString() : (2000 + p.rank).toString();
+        }
+        return {
+          ...p,
+          password: newPin,
+        };
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+    showToast('Tüm üyelerin şifreleri başarıyla güncellendi ve hafızaya kaydedildi.', 'success');
+  };
+
+  const getFormattedPasswordListText = (): string => {
+    const women = players.filter((p) => p.category === 'women').sort((a, b) => a.rank - b.rank);
+    const men = players.filter((p) => p.category === 'men').sort((a, b) => a.rank - b.rank);
+
+    let text = `🎾 *ZTDSK KIŞ DEFİ LİGİ - OYUNCU GİRİŞ ŞİFRELERİ LİSTESİ*\n`;
+    text += `_Sisteme giriş için açılır listeden isminizi seçip karşısındaki şifreyi giriniz._\n\n`;
+
+    text += `🏆 *14(+) TEK KADINLAR (${women.length} Sporcu)*\n`;
+    women.forEach((w) => {
+      text += `${w.rank}. ${w.name} 👉 Şifre: *${w.password}*\n`;
+    });
+
+    text += `\n🏆 *14(+) TEK ERKEKLER (${men.length} Sporcu)*\n`;
+    men.forEach((m) => {
+      text += `${m.rank}. ${m.name} 👉 Şifre: *${m.password}*\n`;
+    });
+
+    text += `\n_Yönetici / Defi Komitesi Şifresi: 6735_`;
+    return text;
+  };
+
   return (
     <DefiContext.Provider
       value={{
@@ -417,6 +605,7 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         addPlayer,
         updatePlayer,
+        updatePlayerPassword,
         deletePlayer,
         reorderRanks,
         setPlayerExcuse,
@@ -425,9 +614,15 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirmScore,
         adminDirectApproveScore,
         cancelMatch,
+        deleteMatch,
+        generateBulkPasswords,
+        getFormattedPasswordListText,
         resetToDefaults,
         exportBackupJson,
         importBackupJson,
+        theme,
+        setTheme,
+        toggleTheme,
         toast,
         showToast,
       }}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDefi } from '../context/DefiContext';
 import { Match, Player } from '../types/defi';
-import { Calendar as CalendarIcon, Clock, MapPin, ChevronLeft, ChevronRight, Trophy, Flame, CheckCircle2, AlertCircle, Swords, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, MapPin, ChevronLeft, ChevronRight, Trophy, Flame, CheckCircle2, AlertCircle, Swords, ArrowRight, Trash2, AlertTriangle } from 'lucide-react';
 
 interface CalendarViewProps {
   onOpenScoreModal: (match: Match) => void;
@@ -9,7 +9,10 @@ interface CalendarViewProps {
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) => {
-  const { matches, players, currentCategory, currentUser, isAdmin, confirmScore } = useDefi();
+  const { matches, players, currentCategory, currentUser, isAdmin, confirmScore, deleteMatch, theme } = useDefi();
+  const isLight = theme === 'light';
+
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
 
   // Current simulation reference date is 2026-10-14
   const TODAY_STR = '2026-10-14';
@@ -139,7 +142,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                       <span>{m.matchTime || '18:00'}</span>
                       <span className="text-slate-600">•</span>
                       <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{m.court || 'Merkez Kort'}</span>
+                      <span>{m.court || 'A Kortu (Sert Kort)'}</span>
                     </span>
 
                     {m.status === 'confirmed' ? (
@@ -163,41 +166,47 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                   {/* Players Display */}
                   <div className="grid grid-cols-2 gap-3 items-center py-1">
                     {/* Challenger */}
-                    <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800 flex items-center gap-2">
+                    <div className={`p-2.5 rounded-lg border flex items-center gap-2 ${
+                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
+                    }`}>
                       <div className="w-7 h-7 rounded-md bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
                         #{challenger.rank}
                       </div>
                       <div className="truncate text-xs">
-                        <div className="font-semibold text-white truncate">{challenger.name}</div>
-                        <div className="text-[10px] text-emerald-400">Meydan Okuyan</div>
+                        <div className={`font-bold truncate ${isLight ? 'text-slate-950' : 'text-white'}`}>{challenger.name}</div>
+                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Meydan Okuyan</div>
                       </div>
                     </div>
 
                     {/* Defender */}
-                    <div className="p-2.5 bg-slate-900 rounded-lg border border-slate-800 flex items-center gap-2">
+                    <div className={`p-2.5 rounded-lg border flex items-center gap-2 ${
+                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
+                    }`}>
                       <div className="w-7 h-7 rounded-md bg-sky-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
                         #{defender.rank}
                       </div>
                       <div className="truncate text-xs">
-                        <div className="font-semibold text-white truncate">{defender.name}</div>
-                        <div className="text-[10px] text-sky-400">Üst Sıradaki</div>
+                        <div className={`font-bold truncate ${isLight ? 'text-slate-950' : 'text-white'}`}>{defender.name}</div>
+                        <div className="text-[10px] text-sky-600 dark:text-sky-400 font-medium">Üst Sıradaki</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Score or Actions */}
                   {m.score ? (
-                    <div className="p-2.5 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+                    <div className={`p-2.5 rounded-lg border flex items-center justify-between text-xs ${
+                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/90 border-slate-800'
+                    }`}>
                       <div>
-                        <div className="text-[10px] text-slate-400">Maç Skoru:</div>
-                        <div className="font-mono font-bold text-emerald-400 text-sm tracking-wide">
+                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Maç Skoru:</div>
+                        <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm tracking-wide">
                           {m.score.scoreText}
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-slate-400">Kazanan:</span>
-                        <div className="font-bold text-white flex items-center gap-1 justify-end">
-                          <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                        <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Kazanan:</span>
+                        <div className={`font-bold flex items-center gap-1 justify-end ${isLight ? 'text-slate-950' : 'text-white'}`}>
+                          <Trophy className="w-3.5 h-3.5 text-amber-500" />
                           <span>{getPlayer(m.score.winnerId)?.name}</span>
                         </div>
                       </div>
@@ -209,11 +218,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                   )}
 
                   {/* Score Submission or Confirmation Button */}
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     {m.status === 'scheduled' && canScore && (
                       <button
                         onClick={() => onOpenScoreModal(m)}
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow"
                       >
                         <Trophy className="w-3.5 h-3.5" />
                         <span>Skor Gir (Kazanan Bildirimi)</span>
@@ -223,7 +232,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                     {m.status === 'score_submitted' && isLoserAwaitingMyConfirmation && (
                       <button
                         onClick={() => confirmScore(m.id)}
-                        className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow animate-bounce"
+                        className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow animate-bounce"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Skoru Onayla & Sıralamayı Güncelle</span>
@@ -233,9 +242,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                     {m.status === 'score_submitted' && isAdmin && (
                       <button
                         onClick={() => confirmScore(m.id)}
-                        className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer"
+                        className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer"
                       >
                         Yönetici Olarak Onayla
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => setMatchToDelete(m)}
+                        className="py-1.5 px-3 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 border border-rose-300 dark:border-rose-800 flex items-center justify-center gap-1 transition cursor-pointer"
+                        title="Bu Maç Eşleştirmesini İptal Et & Sil"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>İptal Et / Sil</span>
                       </button>
                     )}
                   </div>
@@ -420,7 +440,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-slate-400 flex items-center gap-1 font-medium">
                           <Clock className="w-3 h-3 text-sky-400" />
-                          {m.matchTime || '18:00'} • {m.court || 'Merkez Kort'}
+                          {m.matchTime || '18:00'} • {m.court || 'A Kortu (Sert Kort)'}
                         </span>
                         {m.status === 'confirmed' ? (
                           <span className="text-emerald-400 font-bold">Tamamlandı</span>
@@ -446,15 +466,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
                         </div>
                       )}
 
-                      {m.status === 'scheduled' && canScore && (
-                        <button
-                          onClick={() => onOpenScoreModal(m)}
-                          className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
-                        >
-                          <Trophy className="w-3.5 h-3.5" />
-                          <span>Skor Gir</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        {m.status === 'scheduled' && canScore && (
+                          <button
+                            onClick={() => onOpenScoreModal(m)}
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Trophy className="w-3.5 h-3.5" />
+                            <span>Skor Gir</span>
+                          </button>
+                        )}
+
+                        {isAdmin && (
+                          <button
+                            onClick={() => setMatchToDelete(m)}
+                            className="py-1.5 px-2.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 border border-rose-300 dark:border-rose-800 flex items-center justify-center gap-1 transition cursor-pointer"
+                            title="Bu Maç Eşleştirmesini İptal Et & Sil"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>İptal Et / Sil</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -514,6 +547,65 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onOpenScoreModal }) 
           </div>
         )}
       </div>
+
+      {/* MAÇ SİLME / İPTAL ONAY MODALI */}
+      {matchToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 border-2 border-rose-500 ${
+            isLight ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-300 dark:border-rose-700 shadow-sm">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-slate-950' : 'text-white'}`}>
+                  Maç Eşleştirmesini İptal Et & Sil
+                </h3>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Bu maç eşleştirmesi fikstürden, takvimden ve ana sayfa listesinden tamamen silinecektir.
+                </p>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
+              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
+            }`}>
+              <div className="font-bold text-sm text-blue-600 dark:text-blue-400">
+                {getPlayer(matchToDelete.challengerId)?.name || 'Oyuncu'} (#{matchToDelete.challengerRankAtMatch}) vs {getPlayer(matchToDelete.defenderId)?.name || 'Oyuncu'} (#{matchToDelete.defenderRankAtMatch})
+              </div>
+              <div className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                Tarih & Saat: <strong>{matchToDelete.matchDate} {matchToDelete.matchTime}</strong>
+              </div>
+              <div className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                Kort: <strong>{matchToDelete.court}</strong> • Kategori: <strong>{matchToDelete.category === 'men' ? '14(+) Erkekler' : '14(+) Kadınlar'}</strong>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setMatchToDelete(null)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                }`}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMatch(matchToDelete.id);
+                  setMatchToDelete(null);
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow"
+              >
+                Evet, Eşleştirmeyi İptal Et ve Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

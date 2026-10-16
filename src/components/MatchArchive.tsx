@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { useDefi } from '../context/DefiContext';
 import { Match, Player } from '../types/defi';
-import { CheckCircle2, Calendar, MapPin, Trophy, Search, Filter, Camera, Swords } from 'lucide-react';
+import { CheckCircle2, Calendar, MapPin, Trophy, Search, Filter, Camera, Swords, Trash2 } from 'lucide-react';
 
 interface MatchArchiveProps {
   onOpenScoreModal?: (match: Match) => void;
 }
 
 export const MatchArchive: React.FC<MatchArchiveProps> = ({ onOpenScoreModal }) => {
-  const { matches, players, currentCategory } = useDefi();
+  const { matches, players, currentCategory, isAdmin, deleteMatch, theme } = useDefi();
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'score_submitted' | 'scheduled'>('all');
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
+  const isLight = theme === 'light';
 
   const categoryMatches = matches
     .filter((m) => m.category === currentCategory && m.status !== 'cancelled')
@@ -175,6 +177,16 @@ export const MatchArchive: React.FC<MatchArchiveProps> = ({ onOpenScoreModal }) 
                     </div>
                   )}
 
+                  {isAdmin && (
+                    <button
+                      onClick={() => setMatchToDelete(m)}
+                      className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-xl border border-rose-300 dark:border-rose-800 transition cursor-pointer"
+                      title="Maç Eşleştirmesini İptal Et & Sil"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
                   {m.photoUrl && (
                     <a
                       href={m.photoUrl}
@@ -190,6 +202,65 @@ export const MatchArchive: React.FC<MatchArchiveProps> = ({ onOpenScoreModal }) 
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* MAÇ SİLME / İPTAL ONAY MODALI */}
+      {matchToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 border-2 border-rose-500 ${
+            isLight ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-300 dark:border-rose-700 shadow-sm">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-slate-950' : 'text-white'}`}>
+                  Maç Eşleştirmesini İptal Et & Sil
+                </h3>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Bu maç eşleştirmesi arşivden, takvimden ve ana sayfa listesinden tamamen silinecektir.
+                </p>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
+              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
+            }`}>
+              <div className="font-bold text-sm text-blue-600 dark:text-blue-400">
+                {getPlayer(matchToDelete.challengerId)?.name || 'Oyuncu'} (#{matchToDelete.challengerRankAtMatch}) vs {getPlayer(matchToDelete.defenderId)?.name || 'Oyuncu'} (#{matchToDelete.defenderRankAtMatch})
+              </div>
+              <div className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                Tarih: <strong>{matchToDelete.matchDate} {matchToDelete.matchTime}</strong>
+              </div>
+              <div className={isLight ? 'text-slate-600' : 'text-slate-400'}>
+                Kort: <strong>{matchToDelete.court}</strong> • Kategori: <strong>{matchToDelete.category === 'men' ? '14(+) Erkekler' : '14(+) Kadınlar'}</strong>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setMatchToDelete(null)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${
+                  isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                }`}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMatch(matchToDelete.id);
+                  setMatchToDelete(null);
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow"
+              >
+                Evet, Eşleştirmeyi İptal Et ve Sil
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

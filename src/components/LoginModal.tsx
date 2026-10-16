@@ -6,16 +6,30 @@ interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   preselectedPlayerId?: string;
+  initialMode?: 'player' | 'admin';
 }
 
-export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, preselectedPlayerId }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({
+  isOpen,
+  onClose,
+  preselectedPlayerId,
+  initialMode = 'player',
+}) => {
   const { players, currentCategory, loginAsPlayer, loginAsAdmin } = useDefi();
 
-  const [activeMode, setActiveMode] = useState<'player' | 'admin'>('player');
+  const [activeMode, setActiveMode] = useState<'player' | 'admin'>(initialMode);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(preselectedPlayerId || '');
-  const [password, setPassword] = useState<string>('123');
-  const [adminPassword, setAdminPassword] = useState<string>('admin');
+  const [password, setPassword] = useState<string>('');
+  const [adminPassword, setAdminPassword] = useState<string>('6735');
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialMode) setActiveMode(initialMode);
+      if (preselectedPlayerId) setSelectedPlayerId(preselectedPlayerId);
+      setErrorMessage('');
+    }
+  }, [isOpen, initialMode, preselectedPlayerId]);
 
   if (!isOpen) return null;
 
@@ -161,17 +175,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, presele
                   <label className="text-xs font-medium text-slate-300">
                     Oyuncu Şifresi:
                   </label>
-                  <span className="text-[11px] text-emerald-400">
-                    Varsayılan: 123
+                  <span className="text-[11px] text-slate-400">
+                    Defi Komitesi Şifresi
                   </span>
                 </div>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Şifrenizi girin..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  placeholder="4 haneli şifrenizi girin..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                 />
+                <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                  💡 Şifrenizi unuttuysanız Defi Komitesi / Yöneticinizden öğrenebilirsiniz.
+                </p>
               </div>
 
               <button
@@ -186,24 +203,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, presele
               <div className="pt-3 border-t border-slate-800">
                 <div className="text-[11px] text-slate-400 mb-2 flex items-center gap-1 font-medium">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Hızlı Test Girişleri:
+                  Hızlı Test Girişleri (Tek Tıkla Giriş):
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <button
                     type="button"
-                    onClick={() => quickLoginAs('p_m2')}
+                    onClick={() => quickLoginAs('p_m1')}
                     className="p-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-lg text-left transition"
                   >
-                    <div className="font-semibold text-sky-400 truncate">Hüsnü Kazlı</div>
-                    <div className="text-[10px] text-slate-400">Erkekler #2 Sıra</div>
+                    <div className="font-semibold text-emerald-400 truncate">Yiğit Yaman</div>
+                    <div className="text-[10px] text-slate-400">Erkekler #1 (Şifre: 1001)</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => quickLoginAs('p_w3')}
                     className="p-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-lg text-left transition"
                   >
-                    <div className="font-semibold text-rose-400 truncate">Selin Öztürk</div>
-                    <div className="text-[10px] text-amber-300">Onay bekleyen maçı var!</div>
+                    <div className="font-semibold text-rose-400 truncate">Derin Türkçelik</div>
+                    <div className="text-[10px] text-amber-300">Kadınlar #3 (Onay Bekliyor)</div>
                   </button>
                 </div>
               </div>
@@ -215,16 +232,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, presele
                   <label className="text-xs font-medium text-slate-300">
                     Defi Komitesi / Yönetici Şifresi:
                   </label>
-                  <span className="text-[11px] text-amber-400 font-mono">
-                    Şifre: admin
+                  <span className="text-[11px] text-amber-400 font-mono font-bold">
+                    Şifre: 6735
                   </span>
                 </div>
                 <input
                   type="password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Yönetici şifresi..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                  placeholder="Yönetici şifresi (6735)..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
                 />
               </div>
 

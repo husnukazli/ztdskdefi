@@ -279,22 +279,45 @@ export function applyMatchResultToRankings(
   return updated.sort((a, b) => a.rank - b.rank);
 }
 
+export function buildChallengeMessageText(
+  challenger: Player,
+  defender: Player
+): string {
+  // Semi-formal address: Hanım for women, Bey for men as instructed
+  const honorific = defender.category === 'women' ? 'Hanım' : 'Bey';
+  const categoryLabel = challenger.category === 'women' ? 'Tek Kadınlar' : 'Tek Erkekler';
+
+  return (
+    `Selamlar ${defender.name} ${honorific} 🎾\n\n` +
+    `ZTDSK Defi Ligi kapsamında sizinle maç yapmak için teklifte bulunuyorum. Kort rezervasyonu ve maç topları benden olacaktır. Bu hafta içi uygun olduğunuz gün ve saatleri kararlaştırabiliriz. İyi maçlar dilerim.\n\n` +
+    `— *${challenger.name}* (${categoryLabel}, Sıra: #${challenger.rank})`
+  );
+}
+
 /**
  * Builds the WhatsApp pre-filled text for defi match challenge
  */
 export function buildWhatsAppChallengeUrl(
   challenger: Player,
   defender: Player,
-  phone: string
+  phone?: string
 ): string {
-  const cleanPhone = phone.replace(/[^0-9]/g, '');
-  const message = `🎾 *ZONGULDAK TENİS DENİZ SPOR KULÜBÜ DEFİ LİGİ*\n\n` +
-    `Merhaba *${defender.name}*,\n` +
-    `Ben *${challenger.name}* (Sıra #${challenger.rank}). Defi Ligi kuralları (Madde 7) çerçevesinde sana maç teklif ediyorum!\n\n` +
-    `📌 *Kort & Top:* 1.5 saatlik kort rezervasyonu ve maç topları tarafımca karşılanacaktır.\n` +
-    `📅 Hangi gün ve saat senin için uygun? Lütfen uygun olduğun zaman dilimini ilet, kortu ayırtıp Defi Komitesi'ne ve sisteme bildirelim.\n\n` +
-    `_Defi Koordinatörü: Vahit Bergin_\n` +
-    `İyi tenisler!`;
+  const message = buildChallengeMessageText(challenger, defender);
+  if (phone && phone.replace(/[^0-9]/g, '').length >= 10) {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    return `https://wa.me/${cleanPhone.startsWith('90') ? cleanPhone : '90' + cleanPhone}?text=${encodeURIComponent(message)}`;
+  }
+  // Default to WhatsApp group share picker
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+}
 
-  return `https://wa.me/${cleanPhone.startsWith('90') ? cleanPhone : '90' + cleanPhone}?text=${encodeURIComponent(message)}`;
+/**
+ * WhatsApp group share link (opens WhatsApp chat picker to choose ZTDSK group)
+ */
+export function buildWhatsAppGroupShareUrl(
+  challenger: Player,
+  defender: Player
+): string {
+  const message = buildChallengeMessageText(challenger, defender);
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
 }

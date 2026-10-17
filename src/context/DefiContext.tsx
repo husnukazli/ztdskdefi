@@ -28,6 +28,44 @@ function cleanForFirestore<T extends Record<string, any>>(obj: T): Record<string
   return result;
 }
 
+// Helper: Yanlış girilmiş onaylı bir maçın sıralama ve istatistik etkisini geri alır
+function revertMatchEffectOnPlayers(categoryPlayers: Player[], match: Match): Player[] {
+  if (match.status !== 'confirmed' || !match.score) return categoryPlayers;
+
+  const oldWinnerId = match.score.winnerId;
+  const oldLoserId = match.score.loserId;
+  const challengerWonPreviously = oldWinnerId === match.challengerId;
+  const targetRank = match.defenderRankAtMatch;
+  const oldChallengerRank = match.challengerRankAtMatch;
+
+  return categoryPlayers
+    .map((p) => {
+      let rank = p.rank;
+      let wins = p.wins;
+      let losses = p.losses;
+      let matchesPlayed = p.matchesPlayed;
+
+      if (p.id === oldWinnerId) {
+        wins = Math.max(0, wins - 1);
+        matchesPlayed = Math.max(0, matchesPlayed - 1);
+      } else if (p.id === oldLoserId) {
+        losses = Math.max(0, losses - 1);
+        matchesPlayed = Math.max(0, matchesPlayed - 1);
+      }
+
+      if (challengerWonPreviously && targetRank < oldChallengerRank) {
+        if (p.id === match.challengerId && p.rank === targetRank) {
+          rank = oldChallengerRank;
+        } else if (p.id !== match.challengerId && p.rank > targetRank && p.rank <= oldChallengerRank) {
+          rank = p.rank - 1;
+        }
+      }
+
+      return { ...p, rank, wins, losses, matchesPlayed };
+    })
+    .sort((a, b) => a.rank - b.rank);
+}
+
 interface DefiContextType {
   players: Player[];
   matches: Match[];
@@ -54,6 +92,22 @@ interface DefiContextType {
   ) => void;
   // Match Management
   scheduleMatch: (match: Omit<Match, 'id' | 'status' | 'createdAt'>) => Match;
+  updateMatchDetails: (
+    matchId: string,
+    updates: Partial<
+      Pick<
+        Match,
+        | 'matchDate'
+        | 'matchTime'
+        | 'court'
+        | 'notes'
+        | 'challengerId'
+        | 'defenderId'
+        | 'challengerRankAtMatch'
+        | 'defenderRankAtMatch'
+      >
+    >
+  ) => void;
   submitScore: (matchId: string, score: MatchScore, photoUrl?: string) => void;
   confirmScore: (matchId: string) => void;
   adminDirectApproveScore: (matchId: string, score: MatchScore) => void;
@@ -209,7 +263,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (snapshot) => {
         if (!isMounted) return;
         if (snapshot.empty) {
-          // Cloud is empty -> seed initial players to Firestore
           const batch = writeBatch(db);
           INITIAL_PLAYERS.forEach((p) => {
             batch.set(doc(db, 'players', p.id), cleanForFirestore(p));
@@ -253,7 +306,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
           snapshot.forEach((docSnap) => {
             const data = docSnap.data() as Match;
             const id = docSnap.id;
-            // Purge legacy demo matches (m_101 to m_106)
             if (id === 'm_101' || id === 'm_102' || id === 'm_103' || id === 'm_104' || id === 'm_105' || id === 'm_106') {
               deleteDoc(docSnap.ref).catch(() => {});
               return;
@@ -307,7 +359,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Helper to persist single player to Cloud & Local
   const syncPlayerToCloud = async (player: Player) => {
     try {
       await setDoc(doc(db, 'players', player.id), cleanForFirestore(player));
@@ -316,7 +367,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper to persist array of players to Cloud & Local
   const syncPlayersBatchToCloud = async (allPlayers: Player[]) => {
     try {
       const batch = writeBatch(db);
@@ -329,7 +379,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper to persist match to Cloud & Local
   const syncMatchToCloud = async (match: Match) => {
     try {
       await setDoc(doc(db, 'matches', match.id), cleanForFirestore(match));
@@ -338,7 +387,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper to delete match from Cloud
   const deleteMatchFromCloud = async (matchId: string) => {
     try {
       await deleteDoc(doc(db, 'matches', matchId));
@@ -541,9 +589,52 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newMatch;
   };
 
+  const updateMatchDetails = (
+    matchId: string,
+    updates: Partial<
+      Pick<
+        Match,
+        | 'matchDate'
+        | 'matchTime'
+        | 'court'
+        | 'notes'
+        | 'challengerId'
+        | 'defenderId'
+        | 'challengerRankAtMatch'
+        | 'defenderRankAtMatch'
+      >
+    >
+  ) => {
+    const target = matches.find((m) => m.id === matchId);
+    if (!target) return;
+
+    const updated: Match = {
+      ...target,
+      ...updates,
+    };
+
+    const next = matches.map((m) => (m.id === matchId ? updated : m));
+    setMatches(next);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+    syncMatchToCloud(updated);
+    showToast('Maç eşleşme, tarih ve saat bilgileri başarıyla güncellendi.', 'success');
+  };
+
   const submitScore = (matchId: string, score: MatchScore, photoUrl?: string) => {
     const target = matches.find((m) => m.id === matchId);
     if (!target) return;
+
+    // Eğer daha önce onaylanmış bir maçın skoru yeniden rakip onayına gönderiliyorsa önce eski sıralama etkisini geri al
+    if (target.status === 'confirmed' && target.score) {
+      const cat = target.category;
+      const catPlayers = players.filter((p) => p.category === cat);
+      const revertedCatPlayers = revertMatchEffectOnPlayers(catPlayers, target);
+      const otherCatPlayers = players.filter((p) => p.category !== cat);
+      const nextPlayers = [...otherCatPlayers, ...revertedCatPlayers].sort((a, b) => a.rank - b.rank);
+      setPlayers(nextPlayers);
+      localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(nextPlayers));
+      syncPlayersBatchToCloud(nextPlayers);
+    }
 
     const updated: Match = {
       ...target,
@@ -565,7 +656,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetMatch = matches.find((m) => m.id === matchId);
     if (!targetMatch || !targetMatch.score) return;
 
-    // 1. Mark match confirmed
     const updatedMatch: Match = {
       ...targetMatch,
       status: 'confirmed',
@@ -578,7 +668,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(updatedMatches));
     syncMatchToCloud(updatedMatch);
 
-    // 2. Apply rank shift based on Defi Rules
     const cat = targetMatch.category;
     const catPlayers = players.filter((p) => p.category === cat);
     const updatedCatPlayers = applyMatchResultToRankings(
@@ -601,6 +690,8 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetMatch = matches.find((m) => m.id === matchId);
     if (!targetMatch) return;
 
+    const wasAlreadyConfirmed = targetMatch.status === 'confirmed' && !!targetMatch.score;
+
     const updatedMatch: Match = {
       ...targetMatch,
       status: 'confirmed',
@@ -617,8 +708,19 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     syncMatchToCloud(updatedMatch);
 
     const cat = targetMatch.category;
-    const catPlayers = players.filter((p) => p.category === cat);
-    const updatedCatPlayers = applyMatchResultToRankings(catPlayers, targetMatch, score.winnerId, score.loserId);
+    let catPlayers = players.filter((p) => p.category === cat);
+
+    // Eğer zaten onaylanmış bir maçın skoru düzeltiliyorsa, önce eski maçın sıralama ve istatistik etkisini geri al
+    if (wasAlreadyConfirmed) {
+      catPlayers = revertMatchEffectOnPlayers(catPlayers, targetMatch);
+    }
+
+    const updatedCatPlayers = applyMatchResultToRankings(
+      catPlayers,
+      targetMatch,
+      score.winnerId,
+      score.loserId
+    );
 
     const otherCatPlayers = players.filter((p) => p.category !== cat);
     const nextPlayers = [...otherCatPlayers, ...updatedCatPlayers].sort((a, b) => a.rank - b.rank);
@@ -626,7 +728,12 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(nextPlayers));
     syncPlayersBatchToCloud(nextPlayers);
 
-    showToast('⚡ Yönetici tarafından maç skoru ve sıralama kesinleştirildi ve buluta yazıldı.', 'success');
+    showToast(
+      wasAlreadyConfirmed
+        ? '✅ Maç skoru düzeltildi ve Defi sıralaması yeni sonuca göre güncellendi!'
+        : '⚡ Yönetici tarafından maç skoru ve sıralama kesinleştirildi ve buluta yazıldı.',
+      'success'
+    );
   };
 
   const cancelMatch = (matchId: string) => {
@@ -645,6 +752,18 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteMatch = (matchId: string) => {
+    const target = matches.find((m) => m.id === matchId);
+    if (target && target.status === 'confirmed' && target.score) {
+      const cat = target.category;
+      const catPlayers = players.filter((p) => p.category === cat);
+      const revertedCatPlayers = revertMatchEffectOnPlayers(catPlayers, target);
+      const otherCatPlayers = players.filter((p) => p.category !== cat);
+      const nextPlayers = [...otherCatPlayers, ...revertedCatPlayers].sort((a, b) => a.rank - b.rank);
+      setPlayers(nextPlayers);
+      localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(nextPlayers));
+      syncPlayersBatchToCloud(nextPlayers);
+    }
+
     const next = matches.filter((m) => m.id !== matchId);
     setMatches(next);
     localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
@@ -654,12 +773,10 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetToDefaults = async () => {
     try {
-      // 1. Reset local state
       setPlayers(INITIAL_PLAYERS);
       setMatches([]);
       setSettings(INITIAL_SETTINGS);
 
-      // Clean local storage cache
       try {
         localStorage.removeItem('ztdsk_playoff_draw_men');
         localStorage.removeItem('ztdsk_playoff_draw_women');
@@ -670,13 +787,11 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error(e);
       }
 
-      // 2. Delete all existing matches in Firestore
       const matchesSnap = await getDocs(collection(db, 'matches'));
       for (const d of matchesSnap.docs) {
         await deleteDoc(d.ref);
       }
 
-      // 3. Reset all players in Firestore with official list
       const playersSnap = await getDocs(collection(db, 'players'));
       for (const d of playersSnap.docs) {
         await deleteDoc(d.ref);
@@ -685,7 +800,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setDoc(doc(db, 'players', p.id), cleanForFirestore(p));
       }
 
-      // 4. Reset settings in Firestore
       await setDoc(doc(db, 'settings', 'league_config'), cleanForFirestore(INITIAL_SETTINGS));
 
       showToast('Tüm lig verileri, maçlar ve sıralamalar resmi başlangıç durumuna başarıyla sıfırlandı.', 'success');
@@ -789,6 +903,7 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reorderRanks,
         setPlayerExcuse,
         scheduleMatch,
+        updateMatchDetails,
         submitScore,
         confirmScore,
         adminDirectApproveScore,

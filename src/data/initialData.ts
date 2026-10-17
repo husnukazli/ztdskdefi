@@ -126,8 +126,8 @@ const AVATAR_COLORS = [
   'bg-blue-600',
 ];
 
-// 41 Men from ZTDSK Kış Defi Ligi Güncel Sıralaması
-const MEN_NAMES: string[] = [
+// 41 Men from ZTDSK Kış Defi Ligi Güncel Sıralaması (Resmi Sıralama)
+export const MEN_NAMES: string[] = [
   'Yiğit Yaman',
   'Ömer Uzuntarla',
   'Doruk Doğan',
@@ -135,11 +135,11 @@ const MEN_NAMES: string[] = [
   'Kaan Algan Çavuş',
   'Kayra Gökdemir',
   'Habip Uygun',
+  'Sedar Görmüş',
   'Hüseyin Kundakçı',
   'Mustafa Kemal Günvar',
   'Çınar Çetintaş',
   'Erkin Erol Şen',
-  'Sedar Görmüş',
   'Emre Bozkurt',
   'İlyas Çep',
   'Barbaros Ata Turgut',
@@ -154,11 +154,11 @@ const MEN_NAMES: string[] = [
   'Cem Aygün',
   'Laçin Köktürk',
   'Alper Gökmen',
+  'Hayrettin Fırat',
   'Candaş Gencer',
   'Hasan Külah',
   'Oğuzhan Çelik',
   'Batu Aygün',
-  'Hayrettin Furat',
   'Çağatay Büyükuysal',
   'Utku Kefeli',
   'Mehmet Genç',
@@ -171,8 +171,8 @@ const MEN_NAMES: string[] = [
   'Hikmet Kavaz',
 ];
 
-// 14 Women from ZTDSK Kış Defi Ligi Güncel Sıralaması
-const WOMEN_NAMES: string[] = [
+// 14 Women from ZTDSK Kış Defi Ligi Güncel Sıralaması (Resmi Sıralama)
+export const WOMEN_NAMES: string[] = [
   'Hülya Tosun',
   'Zeynep Talia Şahin',
   'Derin Türkçelik',
@@ -194,7 +194,6 @@ export const INITIAL_PLAYERS: Player[] = [
   ...MEN_NAMES.map((name, index) => {
     const rank = index + 1;
     const pin = (1000 + rank).toString();
-    const isExcusedDemo = rank === 7;
     return {
       id: `p_m${rank}`,
       name,
@@ -203,15 +202,11 @@ export const INITIAL_PLAYERS: Player[] = [
       previousRank: rank,
       phone: 'ZTDSK Üyesi',
       password: pin,
-      isExcused: isExcusedDemo,
-      excuseReason: isExcusedDemo ? 'Şehir Dışı / İş Seyahati (Madde 10)' : undefined,
-      excuseStartDate: isExcusedDemo ? '2026-10-12' : undefined,
-      excuseEndDate: isExcusedDemo ? '2026-10-22' : undefined,
-      excuseNotes: isExcusedDemo ? 'DEFİ Komitesi onayıyla 10 gün iş seyahati izni.' : undefined,
-      matchesPlayed: rank <= 4 ? 3 : rank <= 12 ? 2 : rank <= 20 ? 1 : 0,
-      wins: rank === 1 ? 3 : rank <= 4 ? 2 : rank <= 12 ? 1 : 0,
-      losses: rank === 1 ? 0 : rank <= 4 ? 1 : rank <= 12 ? 1 : 0,
-      ttfScore: Math.max(1200, 2400 - (rank - 1) * 25),
+      isExcused: false,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      ttfScore: 1500,
       joinedDate: '2026-10-05',
       avatarBg: AVATAR_COLORS[index % AVATAR_COLORS.length],
     };
@@ -221,7 +216,6 @@ export const INITIAL_PLAYERS: Player[] = [
   ...WOMEN_NAMES.map((name, index) => {
     const rank = index + 1;
     const pin = (2000 + rank).toString();
-    const isExcusedDemo = rank === 5;
     return {
       id: `p_w${rank}`,
       name,
@@ -230,156 +224,16 @@ export const INITIAL_PLAYERS: Player[] = [
       previousRank: rank,
       phone: 'ZTDSK Üyesi',
       password: pin,
-      isExcused: isExcusedDemo,
-      excuseReason: isExcusedDemo ? 'Sakatlık / Tedavi Süreci (Madde 10)' : undefined,
-      excuseStartDate: isExcusedDemo ? '2026-10-10' : undefined,
-      excuseEndDate: isExcusedDemo ? '2026-10-24' : undefined,
-      excuseNotes: isExcusedDemo ? 'Bilek sakatlığı nedeniyle fizik tedavi görmektedir.' : undefined,
-      matchesPlayed: rank <= 4 ? 3 : rank <= 8 ? 2 : 1,
-      wins: rank === 1 ? 3 : rank <= 4 ? 2 : 1,
-      losses: rank === 1 ? 0 : 1,
-      ttfScore: Math.max(1300, 2300 - (rank - 1) * 35),
+      isExcused: false,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      ttfScore: 1500,
       joinedDate: '2026-10-05',
       avatarBg: AVATAR_COLORS[(index + 3) % AVATAR_COLORS.length],
     };
   }),
 ];
 
-export const INITIAL_MATCHES: Match[] = [
-  // 1. Confirmed Match - Men: Yiğit Yaman (#1) vs Ömer Uzuntarla (#2)
-  {
-    id: 'm_101',
-    category: 'men',
-    challengerId: 'p_m2', // Ömer Uzuntarla
-    defenderId: 'p_m1', // Yiğit Yaman
-    challengerRankAtMatch: 2,
-    defenderRankAtMatch: 1,
-    matchDate: '2026-10-08',
-    matchTime: '18:00',
-    court: 'Merkez Kort',
-    status: 'confirmed',
-    score: {
-      sets: [
-        { player1Games: 6, player2Games: 4 },
-        { player1Games: 3, player2Games: 6 },
-        { player1Games: 10, player2Games: 7 },
-      ],
-      winnerId: 'p_m1', // Yiğit Yaman won, rank 1 preserved
-      loserId: 'p_m2',
-      scoreText: '4-6, 6-3, [10-7]',
-    },
-    scoreSubmittedBy: 'p_m1',
-    scoreSubmittedAt: '2026-10-08T20:15:00Z',
-    scoreConfirmedBy: 'p_m2',
-    scoreConfirmedAt: '2026-10-08T20:45:00Z',
-    notes: 'ZTDSK 1 numaralı kortta nefes kesen maç. Yiğit Yaman 1. sıradaki yerini korudu.',
-    photoUrl: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&w=600&q=80',
-    createdAt: '2026-10-06T11:00:00Z',
-  },
-
-  // 2. Confirmed Match - Women: Hülya Tosun (#1) vs Zeynep Talia Şahin (#2)
-  {
-    id: 'm_102',
-    category: 'women',
-    challengerId: 'p_w2', // Zeynep Talia Şahin
-    defenderId: 'p_w1', // Hülya Tosun
-    challengerRankAtMatch: 2,
-    defenderRankAtMatch: 1,
-    matchDate: '2026-10-10',
-    matchTime: '17:30',
-    court: 'Kort 1 (Toprak)',
-    status: 'confirmed',
-    score: {
-      sets: [
-        { player1Games: 6, player2Games: 4 },
-        { player1Games: 6, player2Games: 3 },
-      ],
-      winnerId: 'p_w1',
-      loserId: 'p_w2',
-      scoreText: '6-4, 6-3',
-    },
-    scoreSubmittedBy: 'p_w1',
-    scoreSubmittedAt: '2026-10-10T19:30:00Z',
-    scoreConfirmedBy: 'p_w2',
-    scoreConfirmedAt: '2026-10-10T20:00:00Z',
-    notes: 'Kadınlar zirve mücadelesinde Hülya Tosun galip geldi.',
-    createdAt: '2026-10-07T14:20:00Z',
-  },
-
-  // 3. TODAY'S MATCH 1 (GÜNÜN MAÇI - 2026-10-14): Kayra Gökdemir (#6) vs Kaan Algan Çavuş (#5)
-  {
-    id: 'm_103',
-    category: 'men',
-    challengerId: 'p_m6', // Kayra Gökdemir
-    defenderId: 'p_m5', // Kaan Algan Çavuş
-    challengerRankAtMatch: 6,
-    defenderRankAtMatch: 5,
-    matchDate: '2026-10-14',
-    matchTime: '18:30',
-    court: 'Merkez Kort',
-    status: 'scheduled',
-    notes: '5 sıra kuralı dahilinde maç teklifi. Wilson US Open topları hazır.',
-    createdAt: '2026-10-12T09:30:00Z',
-  },
-
-  // 4. TODAY'S MATCH 2 (GÜNÜN MAÇI - 2026-10-14): Özlem Yıldız (#4) vs Derin Türkçelik (#3)
-  // Status: score_submitted -> awaiting loser Derin Türkçelik's confirmation!
-  {
-    id: 'm_104',
-    category: 'women',
-    challengerId: 'p_w4', // Özlem Yıldız
-    defenderId: 'p_w3', // Derin Türkçelik
-    challengerRankAtMatch: 4,
-    defenderRankAtMatch: 3,
-    matchDate: '2026-10-14',
-    matchTime: '15:00',
-    court: 'Kort 2 (Sert Zemin)',
-    status: 'score_submitted',
-    score: {
-      sets: [
-        { player1Games: 6, player2Games: 4 },
-        { player1Games: 2, player2Games: 6 },
-        { player1Games: 10, player2Games: 8 },
-      ],
-      winnerId: 'p_w4',
-      loserId: 'p_w3',
-      scoreText: '6-4, 2-6, [10-8]',
-    },
-    scoreSubmittedBy: 'p_w4',
-    scoreSubmittedAt: '2026-10-14T17:10:00Z',
-    notes: 'Özlem Yıldız skoru girdi. Derin Türkçelik’in onaylaması bekleniyor.',
-    createdAt: '2026-10-11T16:00:00Z',
-  },
-
-  // 5. UPCOMING MATCH (Takvimde Gelecek Maç): Hüseyin Kundakçı (#8) vs Habip Uygun (#7)
-  {
-    id: 'm_105',
-    category: 'men',
-    challengerId: 'p_m8', // Hüseyin Kundakçı
-    defenderId: 'p_m7', // Habip Uygun
-    challengerRankAtMatch: 8,
-    defenderRankAtMatch: 7,
-    matchDate: '2026-10-16',
-    matchTime: '17:00',
-    court: 'A Kortu (Sert Kort)',
-    status: 'scheduled',
-    notes: 'Hüseyin Kundakçı kort rezervasyonunu yaptı.',
-    createdAt: '2026-10-13T12:00:00Z',
-  },
-
-  // 6. UPCOMING MATCH (Takvimde Gelecek Maç - Women): Merve Yerlikaya (#6) vs Sevilay Yıldırım (#5)
-  {
-    id: 'm_106',
-    category: 'women',
-    challengerId: 'p_w6', // Merve Yerlikaya
-    defenderId: 'p_w5', // Sevilay Yıldırım
-    challengerRankAtMatch: 6,
-    defenderRankAtMatch: 5,
-    matchDate: '2026-10-17',
-    matchTime: '16:30',
-    court: 'B Kortu (Sert Kort)',
-    status: 'scheduled',
-    notes: 'Kadınlar Play-Off ilk 12 sıralama maçı.',
-    createdAt: '2026-10-13T14:15:00Z',
-  },
-];
+// No initial demo matches - Clean start, admin will enter all played matches manually!
+export const INITIAL_MATCHES: Match[] = [];

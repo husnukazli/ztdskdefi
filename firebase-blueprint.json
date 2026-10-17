@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "ZTDSK Defi Ligi sporcusu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "enum": ["men", "women"] },
+        "rank": { "type": "number" },
+        "previousRank": { "type": "number" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" },
+        "matchesPlayed": { "type": "number" },
+        "wins": { "type": "number" },
+        "losses": { "type": "number" },
+        "ttfScore": { "type": "number" },
+        "isExcused": { "type": "boolean" },
+        "excuseReason": { "type": "string" },
+        "excuseStartDate": { "type": "string" },
+        "excuseEndDate": { "type": "string" },
+        "excuseNotes": { "type": "string" },
+        "isNewJoiner": { "type": "boolean" },
+        "avatarBg": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "rank"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Defi Ligi resmi maçı",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "challengerId": { "type": "string" },
+        "defenderId": { "type": "string" },
+        "challengerRankAtMatch": { "type": "number" },
+        "defenderRankAtMatch": { "type": "number" },
+        "category": { "type": "string", "enum": ["men", "women"] },
+        "status": { "type": "string", "enum": ["scheduled", "score_submitted", "confirmed", "cancelled"] },
+        "matchDate": { "type": "string" },
+        "matchTime": { "type": "string" },
+        "court": { "type": "string" },
+        "score": { "type": "object" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "challengerId", "defenderId", "category", "status"]
+    },
+    "LeagueSettings": {
+      "title": "LeagueSettings",
+      "description": "Lig sezonu ve kulüp ayarları",
+      "type": "object",
+      "properties": {
+        "clubName": { "type": "string" },
+        "coordinatorName": { "type": "string" },
+        "leagueStartDate": { "type": "string" },
+        "leagueEndDate": { "type": "string" },
+        "playoffStartDate": { "type": "string" },
+        "playoffEndDate": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": "Player",
+      "description": "Defi oyuncular koleksiyonu"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Defi maçları ve skorlar koleksiyonu"
+    },
+    "/settings/{settingId}": {
+      "schema": "LeagueSettings",
+      "description": "Lig genel ayarları"
+    },
+    "/playoff_draws/{drawId}": {
+      "schema": "object",
+      "description": "Playoff kura çekim sonuçları"
+    },
+    "/system/{docId}": {
+      "schema": "object",
+      "description": "Sistem versiyonu ve yapılandırması"
+    }
+  }
+}

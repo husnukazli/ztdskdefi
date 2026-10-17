@@ -2,6 +2,31 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Player, Match, Category, LeagueSettings, MatchScore } from '../types/defi';
 import { INITIAL_PLAYERS, INITIAL_MATCHES, INITIAL_SETTINGS } from '../data/initialData';
 import { applyMatchResultToRankings } from '../utils/defiRules';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  getDocs,
+} from 'firebase/firestore';
+import { db } from '../firebase';
+
+// Helper to sanitize undefined values for Firestore
+function cleanForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        result[key] = cleanForFirestore(value);
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
 
 interface DefiContextType {
   players: Player[];
@@ -49,6 +74,8 @@ interface DefiContextType {
   // Notification Toast
   toast: { message: string; type: 'success' | 'error' | 'info' } | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  // Cloud Sync
+  isFirestoreConnected: boolean;
 }
 
 const DefiContext = createContext<DefiContextType | undefined>(undefined);
@@ -106,6 +133,18 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  const [currentUser, setCurrentUser] = useState<Player | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(false);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((curr) => (curr?.message === message ? null : curr));
+    }, 4500);
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -122,10 +161,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error(e);
     }
   }, [theme]);
-
-  const [currentUser, setCurrentUser] = useState<Player | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Restore auth
   useEffect(() => {
@@ -153,31 +188,7 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [players]);
 
-  // Persist
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(players));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [players]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(matches));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [matches]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [settings]);
-
+  // Persist category to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_CAT, currentCategory);
@@ -186,13 +197,159 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentCategory]);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast((curr) => (curr?.message === message ? null : curr));
-    }, 4500);
+  // -------------------------------------------------------------
+  // REAL-TIME FIRESTORE SYNCHRONIZATION
+  // -------------------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Players Listener
+    const unsubPlayers = onSnapshot(
+      collection(db, 'players'),
+      (snapshot) => {
+        if (!isMounted) return;
+        if (snapshot.empty) {
+          // Cloud is empty -> seed initial players to Firestore
+          const batch = writeBatch(db);
+          INITIAL_PLAYERS.forEach((p) => {
+            batch.set(doc(db, 'players', p.id), cleanForFirestore(p));
+          });
+          batch.commit().catch(console.error);
+        } else {
+          const cloudPlayers: Player[] = [];
+          snapshot.forEach((docSnap) => {
+            cloudPlayers.push(docSnap.data() as Player);
+          });
+          cloudPlayers.sort((a, b) => a.rank - b.rank);
+          setPlayers(cloudPlayers);
+          try {
+            localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(cloudPlayers));
+          } catch (e) {
+            console.error(e);
+          }
+          setIsFirestoreConnected(true);
+        }
+      },
+      (error) => {
+        console.warn('Firestore players listener:', error);
+      }
+    );
+
+    // 2. Matches Listener
+    const unsubMatches = onSnapshot(
+      collection(db, 'matches'),
+      (snapshot) => {
+        if (!isMounted) return;
+        if (snapshot.empty) {
+          setMatches([]);
+          try {
+            localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify([]));
+          } catch (e) {
+            console.error(e);
+          }
+          setIsFirestoreConnected(true);
+        } else {
+          const cloudMatches: Match[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as Match;
+            const id = docSnap.id;
+            // Purge legacy demo matches (m_101 to m_106)
+            if (id === 'm_101' || id === 'm_102' || id === 'm_103' || id === 'm_104' || id === 'm_105' || id === 'm_106') {
+              deleteDoc(docSnap.ref).catch(() => {});
+              return;
+            }
+            cloudMatches.push(data);
+          });
+          cloudMatches.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          setMatches(cloudMatches);
+          try {
+            localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(cloudMatches));
+          } catch (e) {
+            console.error(e);
+          }
+          setIsFirestoreConnected(true);
+        }
+      },
+      (error) => {
+        console.warn('Firestore matches listener:', error);
+      }
+    );
+
+    // 3. Settings Listener
+    const unsubSettings = onSnapshot(
+      doc(db, 'settings', 'league_config'),
+      (docSnap) => {
+        if (!isMounted) return;
+        if (docSnap.exists()) {
+          const cloudSettings = docSnap.data() as LeagueSettings;
+          setSettings(cloudSettings);
+          try {
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(cloudSettings));
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          setDoc(doc(db, 'settings', 'league_config'), cleanForFirestore(INITIAL_SETTINGS)).catch(
+            console.error
+          );
+        }
+      },
+      (error) => {
+        console.warn('Firestore settings listener:', error);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubPlayers();
+      unsubMatches();
+      unsubSettings();
+    };
+  }, []);
+
+  // Helper to persist single player to Cloud & Local
+  const syncPlayerToCloud = async (player: Player) => {
+    try {
+      await setDoc(doc(db, 'players', player.id), cleanForFirestore(player));
+    } catch (e) {
+      console.warn('Cloud save player error, local fallback active:', e);
+    }
   };
 
+  // Helper to persist array of players to Cloud & Local
+  const syncPlayersBatchToCloud = async (allPlayers: Player[]) => {
+    try {
+      const batch = writeBatch(db);
+      allPlayers.forEach((p) => {
+        batch.set(doc(db, 'players', p.id), cleanForFirestore(p));
+      });
+      await batch.commit();
+    } catch (e) {
+      console.warn('Cloud batch save error, local fallback active:', e);
+    }
+  };
+
+  // Helper to persist match to Cloud & Local
+  const syncMatchToCloud = async (match: Match) => {
+    try {
+      await setDoc(doc(db, 'matches', match.id), cleanForFirestore(match));
+    } catch (e) {
+      console.warn('Cloud save match error, local fallback active:', e);
+    }
+  };
+
+  // Helper to delete match from Cloud
+  const deleteMatchFromCloud = async (matchId: string) => {
+    try {
+      await deleteDoc(doc(db, 'matches', matchId));
+    } catch (e) {
+      console.warn('Cloud delete match error:', e);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // AUTH
+  // -------------------------------------------------------------
   const loginAsPlayer = (playerId: string, password: string) => {
     const player = players.find((p) => p.id === playerId);
     if (!player) {
@@ -219,7 +376,7 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       showToast('Yönetici moduna giriş yapıldı.', 'success');
       return { success: true };
     }
-    return { success: false, message: 'Geçersiz yönetici şifresi! (Komite Şifresi: 6735)' };
+    return { success: false, message: 'Geçersiz yönetici şifresi! Lütfen tekrar deneyiniz.' };
   };
 
   const logout = () => {
@@ -229,6 +386,9 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showToast('Oturum kapatıldı.', 'info');
   };
 
+  // -------------------------------------------------------------
+  // PLAYER ACTIONS
+  // -------------------------------------------------------------
   const addPlayer = (newPlayerData: Omit<Player, 'id' | 'rank' | 'matchesPlayed' | 'wins' | 'losses'>) => {
     const categoryPlayers = players.filter((p) => p.category === newPlayerData.category);
     const maxRank = categoryPlayers.length > 0 ? Math.max(...categoryPlayers.map((p) => p.rank)) : 0;
@@ -246,20 +406,18 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatarBg: newPlayerData.avatarBg || 'bg-emerald-600',
     };
 
-    setPlayers((prev) => [...prev, newPlayer]);
+    const next = [...players, newPlayer];
+    setPlayers(next);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+    syncPlayerToCloud(newPlayer);
     showToast(`${newPlayer.name} defi ligine #${newRank} sıradan başarıyla eklendi.`, 'success');
   };
 
   const updatePlayer = (updatedPlayer: Player) => {
-    setPlayers((prev) => {
-      const next = prev.map((p) => (p.id === updatedPlayer.id ? updatedPlayer : p));
-      try {
-        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
-      }
-      return next;
-    });
+    const next = players.map((p) => (p.id === updatedPlayer.id ? updatedPlayer : p));
+    setPlayers(next);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+    syncPlayerToCloud(updatedPlayer);
     showToast(`${updatedPlayer.name} bilgileri güncellendi.`, 'success');
   };
 
@@ -269,60 +427,62 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       showToast('Şifre boş olamaz.', 'error');
       return;
     }
-    setPlayers((prev) => {
-      const next = prev.map((p) => (p.id === playerId ? { ...p, password: clean } : p));
-      try {
-        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
-      }
-      return next;
-    });
-    showToast(`Şifre başarıyla kaydedildi.`, 'success');
+    const target = players.find((p) => p.id === playerId);
+    if (!target) return;
+
+    const updated = { ...target, password: clean };
+    const next = players.map((p) => (p.id === playerId ? updated : p));
+    setPlayers(next);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+    syncPlayerToCloud(updated);
+    showToast(`Şifre başarıyla kaydedildi ve tüm cihazlarla eşitlendi.`, 'success');
   };
 
   const deletePlayer = (playerId: string) => {
     const p = players.find((x) => x.id === playerId);
     if (!p) return;
 
-    setPlayers((prev) => {
-      const filtered = prev.filter((x) => x.id !== playerId);
-      // Re-normalize ranks within the category
-      const cat = p.category;
-      let counter = 1;
-      return filtered
-        .sort((a, b) => a.rank - b.rank)
-        .map((x) => {
-          if (x.category === cat) {
-            const nextRank = counter++;
-            return { ...x, rank: nextRank };
-          }
-          return x;
-        });
-    });
-    showToast(`${p.name} defi liginden çıkarıldı ve sıralama güncellendi.`, 'info');
+    const filtered = players.filter((x) => x.id !== playerId);
+    const cat = p.category;
+    let counter = 1;
+    const reindexed = filtered
+      .sort((a, b) => a.rank - b.rank)
+      .map((x) => {
+        if (x.category === cat) {
+          const nextRank = counter++;
+          return { ...x, rank: nextRank };
+        }
+        return x;
+      });
+
+    setPlayers(reindexed);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(reindexed));
+    deleteDoc(doc(db, 'players', playerId)).catch(console.error);
+    syncPlayersBatchToCloud(reindexed);
+    showToast(`${p.name} ligden çıkarıldı ve sıralama düzenlendi.`, 'info');
   };
 
   const reorderRanks = (category: Category, newOrderIds: string[]) => {
-    setPlayers((prev) => {
-      const otherCatPlayers = prev.filter((p) => p.category !== category);
-      const catPlayersMap = new Map(prev.filter((p) => p.category === category).map((p) => [p.id, p]));
+    const catPlayers = players.filter((p) => p.category === category);
+    const otherCatPlayers = players.filter((p) => p.category !== category);
 
-      const reordered: Player[] = [];
-      newOrderIds.forEach((id, index) => {
-        const p = catPlayersMap.get(id);
-        if (p) {
-          reordered.push({
-            ...p,
-            previousRank: p.rank,
-            rank: index + 1,
-          });
-        }
-      });
-
-      return [...otherCatPlayers, ...reordered].sort((a, b) => a.rank - b.rank);
+    const reordered: Player[] = [];
+    newOrderIds.forEach((id, index) => {
+      const found = catPlayers.find((p) => p.id === id);
+      if (found) {
+        reordered.push({
+          ...found,
+          previousRank: found.rank,
+          rank: index + 1,
+        });
+      }
     });
-    showToast('Defi sıralaması başarıyla yeniden düzenlendi.', 'success');
+
+    const combined = [...otherCatPlayers, ...reordered].sort((a, b) => a.rank - b.rank);
+    setPlayers(combined);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(combined));
+    syncPlayersBatchToCloud(combined);
+    showToast('Defi sıralaması başarıyla yeniden düzenlendi ve veritabanına işlendi.', 'success');
   };
 
   const setPlayerExcuse = (
@@ -333,55 +493,38 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     excuseEndDate?: string,
     excuseNotes?: string
   ) => {
-    setPlayers((prev) => {
-      const next = prev.map((p) =>
-        p.id === playerId
-          ? {
-              ...p,
-              isExcused,
-              excuseReason: isExcused ? excuseReason : undefined,
-              excuseStartDate: isExcused ? excuseStartDate : undefined,
-              excuseEndDate: isExcused ? excuseEndDate : undefined,
-              excuseNotes: isExcused ? excuseNotes : undefined,
-            }
-          : p
-      );
-      try {
-        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
-      }
-      return next;
-    });
+    const target = players.find((p) => p.id === playerId);
+    if (!target) return;
 
-    setCurrentUser((prev) => {
-      if (prev && prev.id === playerId) {
-        const updated = {
-          ...prev,
-          isExcused,
-          excuseReason: isExcused ? excuseReason : undefined,
-          excuseStartDate: isExcused ? excuseStartDate : undefined,
-          excuseEndDate: isExcused ? excuseEndDate : undefined,
-          excuseNotes: isExcused ? excuseNotes : undefined,
-        };
-        try {
-          localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify({ type: 'player', player: updated }));
-        } catch (e) {
-          console.error(e);
-        }
-        return updated;
-      }
-      return prev;
-    });
+    const updated: Player = {
+      ...target,
+      isExcused,
+      excuseReason: isExcused ? excuseReason : undefined,
+      excuseStartDate: isExcused ? excuseStartDate : undefined,
+      excuseEndDate: isExcused ? excuseEndDate : undefined,
+      excuseNotes: isExcused ? excuseNotes : undefined,
+    };
+
+    const next = players.map((p) => (p.id === playerId ? updated : p));
+    setPlayers(next);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+    syncPlayerToCloud(updated);
+
+    if (currentUser && currentUser.id === playerId) {
+      setCurrentUser(updated);
+    }
 
     showToast(
       isExcused
-        ? `Mazeret bildirimi kaydedildi (${excuseReason || 'Mazeretli'}). Listede mazeretli olarak görüneceksiniz.`
+        ? `Mazeret bildirimi kaydedildi (${excuseReason || 'Mazeretli'}). Tüm cihazlarda mazeretli olarak görünecektir.`
         : 'Mazeret durumu kaldırıldı, ligde tekrar aktif durumdasınız.',
       'info'
     );
   };
 
+  // -------------------------------------------------------------
+  // MATCH ACTIONS
+  // -------------------------------------------------------------
   const scheduleMatch = (matchData: Omit<Match, 'id' | 'status' | 'createdAt'>): Match => {
     const newMatch: Match = {
       ...matchData,
@@ -389,27 +532,32 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'scheduled',
       createdAt: new Date().toISOString(),
     };
-    setMatches((prev) => [newMatch, ...prev]);
-    showToast('Maç takvime ve sisteme kaydedildi.', 'success');
+
+    const next = [newMatch, ...matches];
+    setMatches(next);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+    syncMatchToCloud(newMatch);
+    showToast('Maç merkezi veritabanına ve takvime kaydedildi.', 'success');
     return newMatch;
   };
 
   const submitScore = (matchId: string, score: MatchScore, photoUrl?: string) => {
-    setMatches((prev) =>
-      prev.map((m) => {
-        if (m.id === matchId) {
-          return {
-            ...m,
-            status: 'score_submitted',
-            score,
-            photoUrl: photoUrl || m.photoUrl,
-            scoreSubmittedBy: score.winnerId,
-            scoreSubmittedAt: new Date().toISOString(),
-          };
-        }
-        return m;
-      })
-    );
+    const target = matches.find((m) => m.id === matchId);
+    if (!target) return;
+
+    const updated: Match = {
+      ...target,
+      status: 'score_submitted',
+      score,
+      photoUrl: photoUrl || target.photoUrl,
+      scoreSubmittedBy: score.winnerId,
+      scoreSubmittedAt: new Date().toISOString(),
+    };
+
+    const next = matches.map((m) => (m.id === matchId ? updated : m));
+    setMatches(next);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+    syncMatchToCloud(updated);
     showToast('Skor sisteme iletildi! Sıralamanın güncellenmesi için rakibin onayı bekleniyor.', 'info');
   };
 
@@ -418,18 +566,17 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetMatch || !targetMatch.score) return;
 
     // 1. Mark match confirmed
-    const updatedMatches = matches.map((m) => {
-      if (m.id === matchId) {
-        return {
-          ...m,
-          status: 'confirmed' as const,
-          scoreConfirmedBy: currentUser?.id || 'admin',
-          scoreConfirmedAt: new Date().toISOString(),
-        };
-      }
-      return m;
-    });
+    const updatedMatch: Match = {
+      ...targetMatch,
+      status: 'confirmed',
+      scoreConfirmedBy: currentUser?.id || 'admin',
+      scoreConfirmedAt: new Date().toISOString(),
+    };
+
+    const updatedMatches = matches.map((m) => (m.id === matchId ? updatedMatch : m));
     setMatches(updatedMatches);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(updatedMatches));
+    syncMatchToCloud(updatedMatch);
 
     // 2. Apply rank shift based on Defi Rules
     const cat = targetMatch.category;
@@ -442,75 +589,110 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     const otherCatPlayers = players.filter((p) => p.category !== cat);
-    setPlayers([...otherCatPlayers, ...updatedCatPlayers].sort((a, b) => a.rank - b.rank));
+    const nextPlayers = [...otherCatPlayers, ...updatedCatPlayers].sort((a, b) => a.rank - b.rank);
+    setPlayers(nextPlayers);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(nextPlayers));
+    syncPlayersBatchToCloud(nextPlayers);
 
-    showToast('Skor onaylandı! Defi Ligi sıralaması kurallara göre otomatik güncellendi.', 'success');
+    showToast('Skor onaylandı! Defi Ligi sıralaması tüm cihazlarda güncellendi.', 'success');
   };
 
   const adminDirectApproveScore = (matchId: string, score: MatchScore) => {
     const targetMatch = matches.find((m) => m.id === matchId);
     if (!targetMatch) return;
 
-    const updatedMatches = matches.map((m) => {
-      if (m.id === matchId) {
-        return {
-          ...m,
-          status: 'confirmed' as const,
-          score,
-          scoreSubmittedBy: score.winnerId,
-          scoreSubmittedAt: new Date().toISOString(),
-          scoreConfirmedBy: 'admin',
-          scoreConfirmedAt: new Date().toISOString(),
-        };
-      }
-      return m;
-    });
+    const updatedMatch: Match = {
+      ...targetMatch,
+      status: 'confirmed',
+      score,
+      scoreSubmittedBy: score.winnerId,
+      scoreSubmittedAt: new Date().toISOString(),
+      scoreConfirmedBy: 'admin',
+      scoreConfirmedAt: new Date().toISOString(),
+    };
+
+    const updatedMatches = matches.map((m) => (m.id === matchId ? updatedMatch : m));
     setMatches(updatedMatches);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(updatedMatches));
+    syncMatchToCloud(updatedMatch);
 
     const cat = targetMatch.category;
     const catPlayers = players.filter((p) => p.category === cat);
     const updatedCatPlayers = applyMatchResultToRankings(catPlayers, targetMatch, score.winnerId, score.loserId);
 
     const otherCatPlayers = players.filter((p) => p.category !== cat);
-    setPlayers([...otherCatPlayers, ...updatedCatPlayers].sort((a, b) => a.rank - b.rank));
+    const nextPlayers = [...otherCatPlayers, ...updatedCatPlayers].sort((a, b) => a.rank - b.rank);
+    setPlayers(nextPlayers);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(nextPlayers));
+    syncPlayersBatchToCloud(nextPlayers);
 
-    showToast('Yönetici tarafından maç skoru ve sıralama kesinleştirildi.', 'success');
+    showToast('⚡ Yönetici tarafından maç skoru ve sıralama kesinleştirildi ve buluta yazıldı.', 'success');
   };
 
   const cancelMatch = (matchId: string) => {
-    setMatches((prev) => {
-      const next = prev.filter((m) => m.id !== matchId);
-      try {
-        localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
-      }
-      return next;
-    });
-    showToast('Maç eşleştirmesi iptal edildi ve listeden kaldırıldı.', 'info');
+    const target = matches.find((m) => m.id === matchId);
+    if (!target) return;
+
+    const updated: Match = {
+      ...target,
+      status: 'cancelled',
+    };
+    const next = matches.map((m) => (m.id === matchId ? updated : m));
+    setMatches(next);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+    syncMatchToCloud(updated);
+    showToast('Maç iptal edildi.', 'info');
   };
 
   const deleteMatch = (matchId: string) => {
-    setMatches((prev) => {
-      const next = prev.filter((m) => m.id !== matchId);
+    const next = matches.filter((m) => m.id !== matchId);
+    setMatches(next);
+    localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+    deleteMatchFromCloud(matchId);
+    showToast('Maç eşleştirmesi sistemden ve veritabanından tamamen silindi.', 'success');
+  };
+
+  const resetToDefaults = async () => {
+    try {
+      // 1. Reset local state
+      setPlayers(INITIAL_PLAYERS);
+      setMatches([]);
+      setSettings(INITIAL_SETTINGS);
+
+      // Clean local storage cache
       try {
-        localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify(next));
+        localStorage.removeItem('ztdsk_playoff_draw_men');
+        localStorage.removeItem('ztdsk_playoff_draw_women');
+        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(INITIAL_PLAYERS));
+        localStorage.setItem(STORAGE_KEY_MATCHES, JSON.stringify([]));
+        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(INITIAL_SETTINGS));
       } catch (e) {
         console.error(e);
       }
-      return next;
-    });
-    showToast('Maç eşleştirmesi sistemden, fikstürden ve takvimden tamamen silindi.', 'success');
-  };
 
-  const resetToDefaults = () => {
-    setPlayers(INITIAL_PLAYERS);
-    setMatches(INITIAL_MATCHES);
-    setSettings(INITIAL_SETTINGS);
-    localStorage.removeItem(STORAGE_KEY_AUTH);
-    setCurrentUser(null);
-    setIsAdmin(false);
-    showToast('Tüm veriler varsayılan Zonguldak Tenis Kulübü lig başlangıç durumuna sıfırlandı.', 'info');
+      // 2. Delete all existing matches in Firestore
+      const matchesSnap = await getDocs(collection(db, 'matches'));
+      for (const d of matchesSnap.docs) {
+        await deleteDoc(d.ref);
+      }
+
+      // 3. Reset all players in Firestore with official list
+      const playersSnap = await getDocs(collection(db, 'players'));
+      for (const d of playersSnap.docs) {
+        await deleteDoc(d.ref);
+      }
+      for (const p of INITIAL_PLAYERS) {
+        await setDoc(doc(db, 'players', p.id), cleanForFirestore(p));
+      }
+
+      // 4. Reset settings in Firestore
+      await setDoc(doc(db, 'settings', 'league_config'), cleanForFirestore(INITIAL_SETTINGS));
+
+      showToast('Tüm lig verileri, maçlar ve sıralamalar resmi başlangıç durumuna başarıyla sıfırlandı.', 'success');
+    } catch (err) {
+      console.error('Reset error:', err);
+      showToast('Sıfırlama sırasında bir hata oluştu.', 'error');
+    }
   };
 
   const exportBackupJson = () => {
@@ -528,14 +710,17 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = JSON.parse(jsonStr);
       if (data.players && Array.isArray(data.players)) {
         setPlayers(data.players);
+        syncPlayersBatchToCloud(data.players);
       }
       if (data.matches && Array.isArray(data.matches)) {
         setMatches(data.matches);
+        data.matches.forEach((m: Match) => syncMatchToCloud(m));
       }
       if (data.settings) {
         setSettings(data.settings);
+        setDoc(doc(db, 'settings', 'league_config'), cleanForFirestore(data.settings)).catch(console.error);
       }
-      showToast('Yedek veriler başarıyla geri yüklendi.', 'success');
+      showToast('Yedek veriler başarıyla geri yüklendi ve buluta aktarıldı.', 'success');
       return true;
     } catch {
       showToast('Geçersiz JSON formatı!', 'error');
@@ -544,29 +729,24 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const generateBulkPasswords = (mode: 'random_pin' | 'common' | 'rank_pin', commonPin: string = '1234') => {
-    setPlayers((prev) => {
-      const next = prev.map((p) => {
-        let newPin = p.password;
-        if (mode === 'random_pin') {
-          newPin = Math.floor(1000 + Math.random() * 9000).toString();
-        } else if (mode === 'common') {
-          newPin = commonPin.trim() || '1234';
-        } else if (mode === 'rank_pin') {
-          newPin = p.category === 'men' ? (1000 + p.rank).toString() : (2000 + p.rank).toString();
-        }
-        return {
-          ...p,
-          password: newPin,
-        };
-      });
-      try {
-        localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
+    const next = players.map((p) => {
+      let newPin = p.password;
+      if (mode === 'random_pin') {
+        newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      } else if (mode === 'common') {
+        newPin = commonPin.trim() || '1234';
+      } else if (mode === 'rank_pin') {
+        newPin = p.category === 'men' ? (1000 + p.rank).toString() : (2000 + p.rank).toString();
       }
-      return next;
+      return {
+        ...p,
+        password: newPin,
+      };
     });
-    showToast('Tüm üyelerin şifreleri başarıyla güncellendi ve hafızaya kaydedildi.', 'success');
+    setPlayers(next);
+    localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(next));
+    syncPlayersBatchToCloud(next);
+    showToast('Tüm üyelerin şifreleri başarıyla güncellendi ve merkezi veritabanına kaydedildi.', 'success');
   };
 
   const getFormattedPasswordListText = (): string => {
@@ -586,7 +766,6 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
       text += `${m.rank}. ${m.name} 👉 Şifre: *${m.password}*\n`;
     });
 
-    text += `\n_Yönetici / Defi Komitesi Şifresi: 6735_`;
     return text;
   };
 
@@ -625,6 +804,7 @@ export const DefiProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleTheme,
         toast,
         showToast,
+        isFirestoreConnected,
       }}
     >
       {children}

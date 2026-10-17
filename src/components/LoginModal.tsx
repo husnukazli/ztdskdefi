@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDefi } from '../context/DefiContext';
-import { X, Lock, User, Shield, ChevronDown, CheckCircle2, Sparkles } from 'lucide-react';
+import { X, Lock, User, Shield, ChevronDown, CheckCircle2 } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -20,7 +20,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [activeMode, setActiveMode] = useState<'player' | 'admin'>(initialMode);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(preselectedPlayerId || '');
   const [password, setPassword] = useState<string>('');
-  const [adminPassword, setAdminPassword] = useState<string>('6735');
+  const [adminPassword, setAdminPassword] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   React.useEffect(() => {
@@ -63,11 +63,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } else {
       setErrorMessage(res.message || 'Hatalı yönetici şifresi.');
     }
-  };
-
-  const quickLoginAs = (playerId: string) => {
-    const res = loginAsPlayer(playerId, '123');
-    if (res.success) onClose();
   };
 
   return (
@@ -173,21 +168,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium text-slate-300">
-                    Oyuncu Şifresi:
+                    Oyuncu Şifresi (PIN):
                   </label>
-                  <span className="text-[11px] text-slate-400">
-                    Defi Komitesi Şifresi
-                  </span>
                 </div>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="4 haneli şifrenizi girin..."
+                  placeholder="4 haneli PIN şifrenizi giriniz..."
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                 />
                 <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                  💡 Şifrenizi unuttuysanız Defi Komitesi / Yöneticinizden öğrenebilirsiniz.
+                  Şifrenizi bilmiyorsanız veya unuttuysanız Defi Komitesi ile iletişime geçebilirsiniz.
                 </p>
               </div>
 
@@ -198,55 +190,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Giriş Yap ve Maçlarıma Git</span>
               </button>
-
-              {/* Quick Demo Logins */}
-              <div className="pt-3 border-t border-slate-800">
-                <div className="text-[11px] text-slate-400 mb-2 flex items-center gap-1 font-medium">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Hızlı Test Girişleri (Tek Tıkla Giriş):
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => quickLoginAs('p_m1')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-lg text-left transition"
-                  >
-                    <div className="font-semibold text-emerald-400 truncate">Yiğit Yaman</div>
-                    <div className="text-[10px] text-slate-400">Erkekler #1 (Şifre: 1001)</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickLoginAs('p_w3')}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-lg text-left transition"
-                  >
-                    <div className="font-semibold text-rose-400 truncate">Derin Türkçelik</div>
-                    <div className="text-[10px] text-amber-300">Kadınlar #3 (Onay Bekliyor)</div>
-                  </button>
-                </div>
-              </div>
             </form>
           ) : (
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-slate-300">
-                    Defi Komitesi / Yönetici Şifresi:
-                  </label>
-                  <span className="text-[11px] text-amber-400 font-mono font-bold">
-                    Şifre: 6735
-                  </span>
-                </div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Yönetici Şifresi:
+                </label>
                 <input
                   type="password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Yönetici şifresi (6735)..."
+                  placeholder="Yönetici şifrenizi giriniz..."
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                  required
                 />
               </div>
 
               <div className="p-3 bg-amber-950/30 border border-amber-800/50 rounded-xl text-xs text-amber-300/90 leading-relaxed">
-                Yönetici modu ile:
+                Yönetici yetkileri:
                 <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] text-slate-300">
                   <li>Oyuncu ekleyip çıkarabilir, şifreleri değiştirebilirsiniz.</li>
                   <li>Geçerli defi listesini manuel veya toplu güncelleyebilirsiniz.</li>

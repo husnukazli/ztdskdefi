@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Defi Players Collection
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Defi Matches Collection
+    match /matches/{matchId} {
+      allow read, delete: if true;
+      allow create, update: if !(matchId in ['m_101', 'm_102', 'm_103', 'm_104', 'm_105', 'm_106']);
+    }
+
+    // League Settings
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Playoff Draws
+    match /playoff_draws/{drawId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // System migration & version tracking
+    match /system/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Connection testing
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

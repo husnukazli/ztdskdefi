@@ -162,6 +162,8 @@ export function validateChallenge(
   };
 }
 
+export const validateChallengeRules = validateChallenge;
+
 /**
  * Calculates new rankings after a match is confirmed based on Madde 7 and Madde 11:
  * - If Challenger beats Defender (who is above them):

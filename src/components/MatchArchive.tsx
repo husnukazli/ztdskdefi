@@ -157,10 +157,20 @@ export const MatchArchive: React.FC<MatchArchiveProps> = ({ onOpenScoreModal }) 
                 <div className="flex items-center gap-4 self-end md:self-auto">
                   {m.score ? (
                     <div className="text-right">
-                      <div className="text-[10px] text-slate-400 uppercase font-semibold">
-                        Nihai Skor (Karar Puanlı)
+                      <div className="flex items-center justify-end gap-1.5 text-[10px] text-slate-400 uppercase font-semibold">
+                        {m.score.finishType === 'walkover' || m.finishType === 'walkover' || m.score.scoreText.includes('W.O.') ? (
+                          <span className="bg-purple-950/90 text-purple-300 border border-purple-700/80 px-2 py-0.5 rounded-full font-bold">
+                            Hükmen (W.O.)
+                          </span>
+                        ) : m.score.finishType === 'retired' || m.finishType === 'retired' || m.score.scoreText.includes('(Ret.') ? (
+                          <span className="bg-amber-950/90 text-amber-300 border border-amber-600/80 px-2 py-0.5 rounded-full font-bold">
+                            Çekilme / Terk (Ret.)
+                          </span>
+                        ) : (
+                          <span>Nihai Skor (Karar Puanlı)</span>
+                        )}
                       </div>
-                      <div className="text-base sm:text-lg font-mono font-bold text-emerald-400 tracking-wider">
+                      <div className="text-sm sm:text-base font-mono font-bold text-emerald-400 tracking-wider">
                         {m.score.scoreText}
                       </div>
                       <div className="text-[11px] text-slate-300 flex items-center gap-1 justify-end font-semibold">

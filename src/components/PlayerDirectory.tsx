@@ -15,7 +15,7 @@ export const PlayerDirectory: React.FC<PlayerDirectoryProps> = ({
   selectedPlayer,
   setSelectedPlayer,
 }) => {
-  const { players, matches, currentCategory, currentUser, theme } = useDefi();
+  const { players, matches, currentCategory, currentUser, isAdmin, theme } = useDefi();
   const [search, setSearch] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'playoff' | 'active'>('all');
   const isLight = theme === 'light';

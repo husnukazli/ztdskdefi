@@ -2,6 +2,8 @@ export type Category = 'men' | 'women';
 
 export type MatchStatus = 'scheduled' | 'score_submitted' | 'confirmed' | 'cancelled';
 
+export type MatchFinishType = 'completed' | 'retired' | 'walkover';
+
 export interface SetScore {
   player1Games: number;
   player2Games: number;
@@ -10,10 +12,12 @@ export interface SetScore {
 }
 
 export interface MatchScore {
-  sets: [SetScore, SetScore, SetScore?]; // 3 set: last set is 10-point match tiebreak if needed
+  sets: SetScore[]; // 1 to 3 sets depending on completion, retirement, or walkover
   winnerId: string;
   loserId: string;
-  scoreText: string; // e.g. "6-4, 3-6, 10-8"
+  scoreText: string; // e.g. "6-4, 3-6, 10-8" or "6-3, 2-1 (Ret.)" or "W.O."
+  finishType?: MatchFinishType; // 'completed' | 'retired' | 'walkover'
+  retireReason?: string; // e.g. "Sakatlık / Çekilme"
 }
 
 export interface Match {
@@ -27,6 +31,7 @@ export interface Match {
   matchTime?: string; // HH:mm
   court?: string; // e.g. "Kort 1", "Merkez Kort"
   status: MatchStatus;
+  finishType?: MatchFinishType;
   score?: MatchScore;
   scoreSubmittedBy?: string; // Kazanan oyuncunun id'si
   scoreSubmittedAt?: string;

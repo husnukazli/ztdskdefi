@@ -17,6 +17,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { ClubLogo } from './ClubLogo';
+import { AppQRCode } from './AppQRCode';
 
 interface HeaderProps {
   activeTab: string;
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, openLog
     settings,
     theme,
     toggleTheme,
+    isFirestoreConnected,
   } = useDefi();
 
   const isLight = theme === 'light';
@@ -98,6 +100,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, openLog
             <span className="bg-blue-900/70 border border-blue-400/30 text-blue-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               Bugün: 14 Ekim 2026
+            </span>
+            <span
+              className={`border px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 transition ${
+                isFirestoreConnected
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                  : 'bg-blue-950/80 border-blue-600/40 text-blue-300'
+              }`}
+              title="Tüm telefonlar ve bilgisayarlar anlık olarak tek bir merkezi bulut veritabanında senkronizedir."
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isFirestoreConnected ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+              <span>{isFirestoreConnected ? 'Canlı Bulut Veritabanı Aktif' : 'Bulut Senkronize Ediliyor'}</span>
             </span>
           </div>
         </div>
@@ -174,7 +187,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, openLog
           )}
 
           {/* Actions & User Status */}
-          <div className="flex items-center gap-2 sm:gap-3 self-end md:self-auto">
+          <div className="flex items-center gap-2 sm:gap-2.5 self-end md:self-auto">
+            {/* Quick Mobile Entry QR Code */}
+            <AppQRCode variant="button_only" />
+
             {/* Day / Night Theme Button in Header */}
             <button
               onClick={toggleTheme}

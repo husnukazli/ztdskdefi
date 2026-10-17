@@ -138,6 +138,26 @@ export const MyMatches: React.FC<MyMatchesProps> = ({ onOpenScoreModal, onOpenLo
         </div>
       </div>
 
+      {/* Active Scheduled Match Flashing Banner */}
+      {pendingScoreSubmissions.length > 0 && (
+        <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border-2 border-emerald-500 rounded-2xl p-4 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-emerald-500 text-slate-950 font-black shadow-lg shrink-0">
+              <Swords className="w-5 h-5" />
+            </span>
+            <div>
+              <div className="font-bold text-sm text-emerald-300 flex items-center gap-2">
+                <span>Eşleştirilmiş Aktif Maçınız Bulunmaktadır!</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Kort randevunuz planlanmıştır. Maç tamamlandığında aşağıdaki listeden "Skor Gir" butonuna basarak set sonuçlarını sisteme iletebilirsiniz.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Active Excuse Alert Banner if currentUser is Excused */}
       {currentUser.isExcused && (
         <div className="bg-gradient-to-r from-amber-950/60 via-amber-900/30 to-amber-950/60 border-2 border-amber-500/80 rounded-2xl p-4.5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">

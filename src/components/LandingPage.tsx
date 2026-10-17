@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ClubLogo } from './ClubLogo';
+import { AppQRCode } from './AppQRCode';
 import { Match } from '../types/defi';
 import { getCalendarEventDetails, downloadIcsFile } from '../utils/calendarHelper';
 
@@ -163,6 +164,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* MOBİL GİRİŞ KAREKODU (TELEFON KAMERASI İLE TARAMA) */}
+      <AppQRCode variant="card" />
 
       {/* PLANLANMIŞ MAÇLAR (TARİH SIRASINA GÖRE) & AJANDAMA EKLE (1 SAAT ÖNCESİNE) */}
       <div className={`rounded-3xl p-5 sm:p-6 border transition-all shadow-sm ${

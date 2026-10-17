@@ -5,7 +5,7 @@ import { Player } from '../types/defi';
 import { PlayoffDrawModal } from './PlayoffDrawModal';
 
 export const PlayoffView: React.FC = () => {
-  const { players, currentCategory, settings } = useDefi();
+  const { players, currentCategory, settings, isAdmin } = useDefi();
 
   const top12 = players
     .filter((p) => p.category === currentCategory)
@@ -70,13 +70,15 @@ export const PlayoffView: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsDrawModalOpen(true)}
-          className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-950/60 cursor-pointer self-start md:self-auto"
-        >
-          <Shuffle className="w-4 h-4" />
-          <span>{hasDrawnRound1 ? '1. Tur Kurasını Yeniden Çek' : '1. Tur Kura Çekimini Başlat'}</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setIsDrawModalOpen(true)}
+            className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-950/60 cursor-pointer self-start md:self-auto"
+          >
+            <Shuffle className="w-4 h-4" />
+            <span>{hasDrawnRound1 ? '1. Tur Kurasını Yeniden Çek' : '1. Tur Kura Çekimini Başlat'}</span>
+          </button>
+        )}
       </div>
 
       {/* 3 Seed Pots Overview */}

@@ -12,6 +12,7 @@ import {
   Sparkles,
   LogIn,
   Trash2,
+  CheckCircle2,
 } from 'lucide-react';
 import { ClubLogo } from './ClubLogo';
 import { AppQRCode } from './AppQRCode';
@@ -50,6 +51,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       return timeA - timeB;
     });
 
+  // Tarih sırasına göre oynanmış ve bitmiş (confirmed) maçlar
+  const completedMatches = matches
+    .filter((m) => m.status === 'confirmed' && m.score)
+    .sort((a, b) => {
+      const timeA = new Date(`${a.matchDate}T${a.matchTime || '12:00'}`).getTime();
+      const timeB = new Date(`${b.matchDate}T${b.matchTime || '12:00'}`).getTime();
+      return timeB - timeA; // En güncel oynanan maç en üstte (kronolojik sıra)
+    });
+
   const handleAddToCalendar = (match: Match) => {
     const p1 = players.find((p) => p.id === match.challengerId);
     const p2 = players.find((p) => p.id === match.defenderId);
@@ -58,7 +68,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
     const { googleCalendarUrl, prepTimeStr } = getCalendarEventDetails(match, p1Name, p2Name);
 
-    // Open Google Calendar in new tab
     window.open(googleCalendarUrl, '_blank');
     showToast(
       `Google Ajanda açılıyor: Maç başlama saati ${match.matchTime || '18:00'}. Ajandanıza ısınma ve hazırlık için 1 saat öncesine (${prepTimeStr}) kaydedilecektir.`,
@@ -165,10 +174,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </div>
 
-      {/* MOBİL GİRİŞ KAREKODU (TELEFON KAMERASI İLE TARAMA) */}
+      {/* MOBİL GİRİŞ KAREKODU */}
       <AppQRCode variant="card" />
 
-      {/* PLANLANMIŞ MAÇLAR (TARİH SIRASINA GÖRE) & AJANDAMA EKLE (1 SAAT ÖNCESİNE) */}
+      {/* PLANLANMIŞ MAÇLAR (TARİH SIRASINA GÖRE) & AJANDAMA EKLE */}
       <div className={`rounded-3xl p-5 sm:p-6 border transition-all shadow-sm ${
         isLight
           ? 'bg-white border-slate-200 text-slate-900'
@@ -215,7 +224,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               const p1Name = p1?.name || 'Oyuncu';
               const p2Name = p2?.name || 'Oyuncu';
 
-              // Format date nicely in Turkish
               const matchDateFormatted = new Date(m.matchDate).toLocaleDateString('tr-TR', {
                 day: 'numeric',
                 month: 'long',
@@ -232,7 +240,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   }`}
                 >
                   <div className="space-y-2.5">
-                    {/* Date, Time, Court & Category */}
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                         <Clock className="w-3.5 h-3.5" />
@@ -254,7 +261,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <span>{m.court || 'A Kortu (Sert Kort)'}</span>
                     </div>
 
-                    {/* Players Matchup */}
                     <div className={`p-3 rounded-xl border space-y-1.5 ${
                       isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-800'
                     }`}>
@@ -288,7 +294,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     )}
                   </div>
 
-                  {/* Calendar Action Button: set 1 hour before match */}
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
                     <button
                       onClick={() => handleAddToCalendar(m)}
@@ -360,7 +365,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </button>
       </div>
 
-      {/* DUAL RANKING TABLES: Clean, Non-Repetitive, Official */}
+      {/* DUAL RANKING TABLES */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* 1. KADIN DEFİ SIRALAMASI */}
         {(activeCategoryTab === 'both' || activeCategoryTab === 'women') && (
@@ -386,7 +391,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            {/* List with direct player entry buttons next to names */}
             <div className={`divide-y rounded-2xl border overflow-hidden ${
               isLight ? 'bg-white divide-slate-200 border-slate-200' : 'bg-slate-950/60 divide-slate-800 border-slate-800'
             }`}>
@@ -442,7 +446,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                   </div>
 
-                  {/* Player entry button next to rank */}
                   <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
                       isLight ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-slate-800 text-slate-300'
@@ -492,7 +495,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            {/* List with direct player entry buttons next to names */}
             <div className={`divide-y rounded-2xl border overflow-hidden max-h-[850px] overflow-y-auto ${
               isLight ? 'bg-white divide-slate-200 border-slate-200' : 'bg-slate-950/60 divide-slate-800 border-slate-800'
             }`}>
@@ -548,7 +550,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                   </div>
 
-                  {/* Player entry button next to rank */}
                   <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
                       isLight ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-slate-800 text-slate-300'
@@ -571,6 +572,123 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* SAYFANIN EN ALTI: OYNANMIŞ VE TAMAMLANMIŞ LİG MAÇLARI (TARİH SIRASINA GÖRE TEK SATIR) */}
+      <div className={`rounded-3xl p-5 sm:p-6 border transition-all shadow-sm ${
+        isLight
+          ? 'bg-white border-slate-200 text-slate-900'
+          : 'bg-slate-900 border-slate-800 text-white'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <span>Oynanmış ve Tamamlanmış Lig Maçları</span>
+                <span className="text-xs bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                  {completedMatches.length} Maç
+                </span>
+              </h2>
+              <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                Tarih sırasına göre oynanan karşılaşmalar, oyuncu isimleri, set skorları ve maçı kazananlar.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {completedMatches.length === 0 ? (
+          <div className={`p-6 text-center text-xs rounded-2xl mt-4 border ${
+            isLight ? 'bg-slate-50 border-slate-200 text-slate-500' : 'bg-slate-950 border-slate-800 text-slate-400'
+          }`}>
+            Henüz tamamlanmış ve onaylanmış maç skoru bulunmamaktadır.
+          </div>
+        ) : (
+          <div className={`mt-4 divide-y rounded-2xl border overflow-hidden ${
+            isLight ? 'bg-white divide-slate-200 border-slate-200' : 'bg-slate-950/60 divide-slate-800 border-slate-800'
+          }`}>
+            {completedMatches.map((m) => {
+              const p1 = players.find((p) => p.id === m.challengerId);
+              const p2 = players.find((p) => p.id === m.defenderId);
+              const winnerId = m.score?.winnerId;
+              const p1Won = winnerId === m.challengerId;
+              const p2Won = winnerId === m.defenderId;
+              const winnerName = p1Won ? p1?.name : p2?.name;
+
+              return (
+                <div
+                  key={m.id}
+                  className={`px-3.5 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs transition ${
+                    isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-900/70'
+                  }`}
+                >
+                  {/* Sol: Tarih ve Kategori */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`font-mono text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                      isLight ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-slate-900 text-slate-300 border-slate-800'
+                    }`}>
+                      {m.matchDate}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      m.category === 'men'
+                        ? isLight ? 'bg-sky-100 text-sky-800' : 'bg-sky-950 text-sky-400'
+                        : isLight ? 'bg-rose-100 text-rose-800' : 'bg-rose-950 text-rose-400'
+                    }`}>
+                      {m.category === 'men' ? 'Erkekler' : 'Kadınlar'}
+                    </span>
+                  </div>
+
+                  {/* Orta: Oyuncu İsimleri (Tek Satırda, Kazanan Vurgulu) */}
+                  <div className="flex items-center gap-2 flex-1 min-w-[220px] sm:justify-center overflow-hidden">
+                    <span className={`truncate flex items-center gap-1 ${
+                      p1Won
+                        ? 'font-black text-emerald-600 dark:text-emerald-400'
+                        : isLight ? 'font-medium text-slate-600' : 'font-medium text-slate-400'
+                    }`}>
+                      {p1Won && <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                      <span>{p1?.name || 'Oyuncu'}</span>
+                      <span className="text-[10px] opacity-75 font-mono">(#{m.challengerRankAtMatch})</span>
+                    </span>
+
+                    <span className="text-[10px] font-bold text-slate-400 uppercase px-1">vs</span>
+
+                    <span className={`truncate flex items-center gap-1 ${
+                      p2Won
+                        ? 'font-black text-emerald-600 dark:text-emerald-400'
+                        : isLight ? 'font-medium text-slate-600' : 'font-medium text-slate-400'
+                    }`}>
+                      {p2Won && <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                      <span>{p2?.name || 'Oyuncu'}</span>
+                      <span className="text-[10px] opacity-75 font-mono">(#{m.defenderRankAtMatch})</span>
+                    </span>
+                  </div>
+
+                  {/* Sağ: Maç Skoru ve Kazanan Rozeti */}
+                  <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+                    <span className={`font-mono font-bold px-2.5 py-1 rounded-lg border text-xs ${
+                      isLight
+                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                        : 'bg-amber-950/60 text-amber-300 border-amber-700/60'
+                    }`}>
+                      {m.score?.scoreText}
+                    </span>
+
+                    <span className={`hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[11px] border ${
+                      isLight
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                    }`}>
+                      <Trophy className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>Kazanan: {winnerName}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

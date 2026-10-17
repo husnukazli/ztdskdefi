@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Match, MatchScore, SetScore, MatchFinishType } from '../types/defi';
 import { useDefi } from '../context/DefiContext';
 import { X, CheckCircle2, Trophy, Camera, AlertCircle, Info, Activity, UserX } from 'lucide-react';
@@ -19,13 +19,58 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
 
   const [set1P1, setSet1P1] = useState<number>(6);
   const [set1P2, setSet1P2] = useState<number>(4);
-  const [set2P1, setSet2P1] = useState<number>(2);
-  const [set2P2, setSet2P2] = useState<number>(1);
-  const [set3P1, setSet3P1] = useState<number>(6);
-  const [set3P2, setSet3P2] = useState<number>(4);
+  const [set2P1, setSet2P1] = useState<number>(6);
+  const [set2P2, setSet2P2] = useState<number>(4);
+  const [set3P1, setSet3P1] = useState<number>(10);
+  const [set3P2, setSet3P2] = useState<number>(8);
   const [hasThirdSet, setHasThirdSet] = useState<boolean>(false);
   const [photoUrl, setPhotoUrl] = useState<string>('');
-  const [matchNotes, setMatchNotes] = useState<string>('');
+
+  // Maç seçildiğinde veya düzenlemek için açıldığında mevcut skorları otomatik doldur
+  useEffect(() => {
+    if (!match) return;
+    if (match.score) {
+      setFinishType(match.score.finishType || match.finishType || 'completed');
+      setManualWinnerId(match.score.winnerId || '');
+      setRetireReason(match.score.retireReason || '');
+
+      const s = match.score.sets || [];
+      if (s[0]) {
+        setSet1P1(s[0].player1Games);
+        setSet1P2(s[0].player2Games);
+      }
+      if (s[1]) {
+        setSet2P1(s[1].player1Games);
+        setSet2P2(s[1].player2Games);
+      }
+      if (s[2]) {
+        setSet3P1(s[2].player1Games);
+        setSet3P2(s[2].player2Games);
+        setHasThirdSet(true);
+      } else {
+        setHasThirdSet(false);
+      }
+
+      if (match.score.finishType === 'retired') {
+        if (s.length === 1) setRetiredStage('set1');
+        else if (s.length === 3) setRetiredStage('set3');
+        else setRetiredStage('set2');
+      }
+    } else {
+      setFinishType('completed');
+      setManualWinnerId('');
+      setRetireReason('');
+      setRetiredStage('set2');
+      setSet1P1(6);
+      setSet1P2(4);
+      setSet2P1(6);
+      setSet2P2(4);
+      setSet3P1(10);
+      setSet3P2(8);
+      setHasThirdSet(false);
+    }
+    setPhotoUrl(match.photoUrl || '');
+  }, [match, isOpen]);
 
   if (!isOpen || !match) return null;
 
@@ -34,6 +79,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
 
   if (!challenger || !defender) return null;
 
+  const isEditingExistingScore = !!match.score;
   const activeWinnerId = manualWinnerId || defender.id;
 
   // Determine sets won
@@ -46,7 +92,6 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
   if (set2P1 > set2P2) p1Sets++;
   else if (set2P2 > set2P1) p2Sets++;
 
-  // Need 3rd set if tied 1-1
   const isTied = p1Sets === 1 && p2Sets === 1;
 
   if (isTied) {
@@ -54,7 +99,6 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
     else if (set3P2 > set3P1) p2Sets++;
   }
 
-  // Calculated winner and loser
   let winner = p1Sets > p2Sets ? challenger : defender;
   let loser = p1Sets > p2Sets ? defender : challenger;
 
@@ -63,7 +107,6 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
     loser = activeWinnerId === challenger.id ? defender : challenger;
   }
 
-  // Check authorization: user must be either challenger, defender, or admin
   const isParticipant =
     isAdmin ||
     (currentUser && (currentUser.id === challenger.id || currentUser.id === defender.id));
@@ -96,7 +139,6 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
         ];
         scoreText = `${set1P1}-${set1P2}, ${set2P1}-${set2P2}, [${set3P1}-${set3P2}] (Ret. - ${retiredPlayer.name} Çekildi${reasonDetail})`;
       } else {
-        // default set2
         sets = [
           { player1Games: set1P1, player2Games: set1P2 },
           { player1Games: set2P1, player2Games: set2P2 },
@@ -142,7 +184,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div>
             <span className="text-[11px] font-bold tracking-wider text-emerald-400 uppercase">
-              Skor Giriş Ekranı
+              {isEditingExistingScore ? 'Maç Skorunu Düzelt / Güncelle' : 'Skor Giriş Ekranı'}
             </span>
             <h2 className="text-base font-bold text-white flex items-center gap-2 mt-0.5">
               <span>{challenger.name}</span>
@@ -160,6 +202,17 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
 
         {/* Form Body */}
         <div className="p-5 space-y-4 overflow-y-auto text-xs">
+          {isEditingExistingScore && (
+            <div className="p-3 bg-amber-950/50 border border-amber-700/70 rounded-xl text-amber-200 flex items-center justify-between">
+              <span>
+                <strong>Mevcut Kayıtlı Skor:</strong> {match.score?.scoreText}
+              </span>
+              <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-300 font-bold">
+                Düzenleme Modu
+              </span>
+            </div>
+          )}
+
           {!isParticipant && (
             <div className="p-3 bg-amber-950/50 border border-amber-800 rounded-xl text-amber-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -280,7 +333,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                 <span>Çekilme / Sakatlık (Retired - Maç Yarım Kaldı):</span>
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Maç sırasında sakatlanan / oyunu bırakan sporcuyu ve galip ilan edilen sporcuyu seçiniz. Ardından maçın yarım kaldığı andaki set skorlarını belirleyiniz:
+                Maç sırasında sakatlanan / oyunu bırakan sporcuyu ve galip ilan edilen sporcuyu seçiniz:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <button
@@ -315,7 +368,6 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                 </button>
               </div>
 
-              {/* Stage selector: in which set did the retirement happen */}
               <div className="pt-1 space-y-1.5">
                 <label className="text-[10px] font-semibold text-amber-300 block">
                   Maç Kaçıncı Sette Yarım Kaldı?
@@ -372,7 +424,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
             </div>
           )}
 
-          {/* Rule 15 Reminder - Only for normal match */}
+          {/* Rule 15 Reminder */}
           {finishType === 'completed' && (
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center gap-2.5 text-slate-300">
               <Info className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -383,10 +435,9 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
             </div>
           )}
 
-          {/* Score Table Input - Click-based Interactive Interface (Shown for completed or retired) */}
+          {/* Score Table Input */}
           {finishType !== 'walkover' && (
             <div className="bg-slate-950 rounded-xl border border-slate-800 p-4 space-y-4">
-              {/* Header summary of selected score */}
               <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   {finishType === 'retired' ? 'Yarım Kalan Skor Seçimi:' : 'Tıklamalı Skor Seçimi:'}
@@ -404,222 +455,15 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                 </span>
               </div>
 
-            {/* Set 1 Selection */}
-            <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">1</span>
-                  1. Set Sonucu
-                </span>
-                <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
-                  {challenger.name.split(' ')[0]}: {set1P1} — {defender.name.split(' ')[0]}: {set1P2}
-                </span>
-              </div>
-
-              {/* Set 1 Quick Presets */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span className="w-16 truncate font-semibold text-emerald-400">{challenger.name.split(' ')[0]} Kazandı:</span>
-                  <div className="flex flex-wrap gap-1 flex-1">
-                    {[
-                      [6, 0], [6, 1], [6, 2], [6, 3], [6, 4], [7, 5], [7, 6]
-                    ].map(([p1g, p2g]) => (
-                      <button
-                        key={`s1-p1-${p1g}-${p2g}`}
-                        type="button"
-                        onClick={() => { setSet1P1(p1g); setSet1P2(p2g); }}
-                        className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                          set1P1 === p1g && set1P2 === p2g
-                            ? 'bg-emerald-600 text-slate-950 ring-2 ring-emerald-400 shadow-md'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                        }`}
-                      >
-                        {p1g}-{p2g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span className="w-16 truncate font-semibold text-sky-400">{defender.name.split(' ')[0]} Kazandı:</span>
-                  <div className="flex flex-wrap gap-1 flex-1">
-                    {[
-                      [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 7], [6, 7]
-                    ].map(([p1g, p2g]) => (
-                      <button
-                        key={`s1-p2-${p1g}-${p2g}`}
-                        type="button"
-                        onClick={() => { setSet1P1(p1g); setSet1P2(p2g); }}
-                        className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                          set1P1 === p1g && set1P2 === p2g
-                            ? 'bg-sky-600 text-slate-950 ring-2 ring-sky-400 shadow-md'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                        }`}
-                      >
-                        {p1g}-{p2g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Set 1 Manual Fine-tune Buttons */}
-              <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-3 text-[11px]">
-                <div>
-                  <div className="text-slate-400 text-[10px] mb-1 font-semibold">{challenger.name} Oyun Sayısı:</div>
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
-                      <button
-                        key={`s1-num-p1-${num}`}
-                        type="button"
-                        onClick={() => setSet1P1(num)}
-                        className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
-                          set1P1 === num
-                            ? 'bg-emerald-500 text-slate-950'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-400 text-[10px] mb-1 font-semibold">{defender.name} Oyun Sayısı:</div>
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
-                      <button
-                        key={`s1-num-p2-${num}`}
-                        type="button"
-                        onClick={() => setSet1P2(num)}
-                        className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
-                          set1P2 === num
-                            ? 'bg-sky-500 text-slate-950'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Set 2 Selection */}
-            {(finishType === 'completed' || retiredStage === 'set2' || retiredStage === 'set3') && (
-            <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">2</span>
-                  2. Set Sonucu
-                </span>
-                <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
-                  {challenger.name.split(' ')[0]}: {set2P1} — {defender.name.split(' ')[0]}: {set2P2}
-                </span>
-              </div>
-
-              {/* Set 2 Quick Presets */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span className="w-16 truncate font-semibold text-emerald-400">{challenger.name.split(' ')[0]} Kazandı:</span>
-                  <div className="flex flex-wrap gap-1 flex-1">
-                    {[
-                      [6, 0], [6, 1], [6, 2], [6, 3], [6, 4], [7, 5], [7, 6]
-                    ].map(([p1g, p2g]) => (
-                      <button
-                        key={`s2-p1-${p1g}-${p2g}`}
-                        type="button"
-                        onClick={() => { setSet2P1(p1g); setSet2P2(p2g); }}
-                        className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                          set2P1 === p1g && set2P2 === p2g
-                            ? 'bg-emerald-600 text-slate-950 ring-2 ring-emerald-400 shadow-md'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                        }`}
-                      >
-                        {p1g}-{p2g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                  <span className="w-16 truncate font-semibold text-sky-400">{defender.name.split(' ')[0]} Kazandı:</span>
-                  <div className="flex flex-wrap gap-1 flex-1">
-                    {[
-                      [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 7], [6, 7]
-                    ].map(([p1g, p2g]) => (
-                      <button
-                        key={`s2-p2-${p1g}-${p2g}`}
-                        type="button"
-                        onClick={() => { setSet2P1(p1g); setSet2P2(p2g); }}
-                        className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                          set2P1 === p1g && set2P2 === p2g
-                            ? 'bg-sky-600 text-slate-950 ring-2 ring-sky-400 shadow-md'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                        }`}
-                      >
-                        {p1g}-{p2g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Set 2 Manual Fine-tune Buttons */}
-              <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-3 text-[11px]">
-                <div>
-                  <div className="text-slate-400 text-[10px] mb-1 font-semibold">{challenger.name} Oyun Sayısı:</div>
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
-                      <button
-                        key={`s2-num-p1-${num}`}
-                        type="button"
-                        onClick={() => setSet2P1(num)}
-                        className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
-                          set2P1 === num
-                            ? 'bg-emerald-500 text-slate-950'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-400 text-[10px] mb-1 font-semibold">{defender.name} Oyun Sayısı:</div>
-                  <div className="flex gap-1">
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
-                      <button
-                        key={`s2-num-p2-${num}`}
-                        type="button"
-                        onClick={() => setSet2P2(num)}
-                        className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
-                          set2P2 === num
-                            ? 'bg-sky-500 text-slate-950'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-            )}
-
-            {/* Set 3 (10'lu Süper Tie-Break) - Automatically highlighted if tied 1-1 or in 3rd set retirement */}
-            {((finishType === 'completed' && (isTied || hasThirdSet)) || (finishType === 'retired' && retiredStage === 'set3')) && (
-              <div className="p-3 bg-amber-950/30 rounded-xl border border-amber-600/50 space-y-2.5">
+              {/* Set 1 Selection */}
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-amber-300 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs">3</span>
-                    3. Set Karar Tie-Break (10 Puanlık)
+                  <span className="font-bold text-slate-200 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">1</span>
+                    1. Set Sonucu
                   </span>
-                  <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-600">
-                    [{set3P1} - {set3P2}]
+                  <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
+                    {challenger.name.split(' ')[0]}: {set1P1} — {defender.name.split(' ')[0]}: {set1P2}
                   </span>
                 </div>
 
@@ -628,16 +472,16 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                     <span className="w-16 truncate font-semibold text-emerald-400">{challenger.name.split(' ')[0]} Kazandı:</span>
                     <div className="flex flex-wrap gap-1 flex-1">
                       {[
-                        [10, 4], [10, 6], [10, 7], [10, 8], [11, 9], [12, 10]
+                        [6, 0], [6, 1], [6, 2], [6, 3], [6, 4], [7, 5], [7, 6]
                       ].map(([p1g, p2g]) => (
                         <button
-                          key={`s3-p1-${p1g}-${p2g}`}
+                          key={`s1-p1-${p1g}-${p2g}`}
                           type="button"
-                          onClick={() => { setSet3P1(p1g); setSet3P2(p2g); }}
+                          onClick={() => { setSet1P1(p1g); setSet1P2(p2g); }}
                           className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                            set3P1 === p1g && set3P2 === p2g
-                              ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 shadow-md'
-                              : 'bg-slate-800 hover:bg-slate-700 text-amber-200 border border-slate-700'
+                            set1P1 === p1g && set1P2 === p2g
+                              ? 'bg-emerald-600 text-slate-950 ring-2 ring-emerald-400 shadow-md'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
                           }`}
                         >
                           {p1g}-{p2g}
@@ -650,16 +494,16 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                     <span className="w-16 truncate font-semibold text-sky-400">{defender.name.split(' ')[0]} Kazandı:</span>
                     <div className="flex flex-wrap gap-1 flex-1">
                       {[
-                        [4, 10], [6, 10], [7, 10], [8, 10], [9, 11], [10, 12]
+                        [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 7], [6, 7]
                       ].map(([p1g, p2g]) => (
                         <button
-                          key={`s3-p2-${p1g}-${p2g}`}
+                          key={`s1-p2-${p1g}-${p2g}`}
                           type="button"
-                          onClick={() => { setSet3P1(p1g); setSet3P2(p2g); }}
+                          onClick={() => { setSet1P1(p1g); setSet1P2(p2g); }}
                           className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
-                            set3P1 === p1g && set3P2 === p2g
-                              ? 'bg-sky-500 text-slate-950 ring-2 ring-sky-300 shadow-md'
-                              : 'bg-slate-800 hover:bg-slate-700 text-sky-200 border border-slate-700'
+                            set1P1 === p1g && set1P2 === p2g
+                              ? 'bg-sky-600 text-slate-950 ring-2 ring-sky-400 shadow-md'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
                           }`}
                         >
                           {p1g}-{p2g}
@@ -669,64 +513,265 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
                   </div>
                 </div>
 
-                {/* Fine tune steppers for tie break */}
-                <div className="pt-2 border-t border-amber-900/40 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400 text-[10px]">{challenger.name.split(' ')[0]}:</span>
-                    <button
-                      type="button"
-                      onClick={() => setSet3P1(Math.max(0, set3P1 - 1))}
-                      className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="font-mono font-bold text-emerald-400 w-5 text-center">{set3P1}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSet3P1(set3P1 + 1)}
-                      className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
-                    >
-                      +
-                    </button>
+                <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-3 text-[11px]">
+                  <div>
+                    <div className="text-slate-400 text-[10px] mb-1 font-semibold">{challenger.name} Oyun Sayısı:</div>
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
+                        <button
+                          key={`s1-num-p1-${num}`}
+                          type="button"
+                          onClick={() => setSet1P1(num)}
+                          className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
+                            set1P1 === num
+                              ? 'bg-emerald-500 text-slate-950'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400 text-[10px]">{defender.name.split(' ')[0]}:</span>
-                    <button
-                      type="button"
-                      onClick={() => setSet3P2(Math.max(0, set3P2 - 1))}
-                      className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="font-mono font-bold text-sky-400 w-5 text-center">{set3P2}</span>
-                    <button
-                      type="button"
-                      onClick={() => setSet3P2(set3P2 + 1)}
-                      className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
-                    >
-                      +
-                    </button>
+                  <div>
+                    <div className="text-slate-400 text-[10px] mb-1 font-semibold">{defender.name} Oyun Sayısı:</div>
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
+                        <button
+                          key={`s1-num-p2-${num}`}
+                          type="button"
+                          onClick={() => setSet1P2(num)}
+                          className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
+                            set1P2 === num
+                              ? 'bg-sky-500 text-slate-950'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Optional 3rd set toggle when not automatically tied */}
-            {!isTied && finishType === 'completed' && (
-              <div className="pt-1 flex items-center justify-end">
-                <label className="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hasThirdSet}
-                    onChange={(e) => setHasThirdSet(e.target.checked)}
-                    className="rounded bg-slate-800 border-slate-700 text-emerald-600"
-                  />
-                  <span>İsteğe bağlı 3. Set (10'lu Maç Tie-Break) Aç / Kapat</span>
-                </label>
-              </div>
-            )}
-          </div>
+              {/* Set 2 Selection */}
+              {(finishType === 'completed' || retiredStage === 'set2' || retiredStage === 'set3') && (
+                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">2</span>
+                      2. Set Sonucu
+                    </span>
+                    <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
+                      {challenger.name.split(' ')[0]}: {set2P1} — {defender.name.split(' ')[0]}: {set2P2}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="w-16 truncate font-semibold text-emerald-400">{challenger.name.split(' ')[0]} Kazandı:</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {[
+                          [6, 0], [6, 1], [6, 2], [6, 3], [6, 4], [7, 5], [7, 6]
+                        ].map(([p1g, p2g]) => (
+                          <button
+                            key={`s2-p1-${p1g}-${p2g}`}
+                            type="button"
+                            onClick={() => { setSet2P1(p1g); setSet2P2(p2g); }}
+                            className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
+                              set2P1 === p1g && set2P2 === p2g
+                                ? 'bg-emerald-600 text-slate-950 ring-2 ring-emerald-400 shadow-md'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            {p1g}-{p2g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="w-16 truncate font-semibold text-sky-400">{defender.name.split(' ')[0]} Kazandı:</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {[
+                          [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 7], [6, 7]
+                        ].map(([p1g, p2g]) => (
+                          <button
+                            key={`s2-p2-${p1g}-${p2g}`}
+                            type="button"
+                            onClick={() => { setSet2P1(p1g); setSet2P2(p2g); }}
+                            className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
+                              set2P1 === p1g && set2P2 === p2g
+                                ? 'bg-sky-600 text-slate-950 ring-2 ring-sky-400 shadow-md'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            {p1g}-{p2g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-3 text-[11px]">
+                    <div>
+                      <div className="text-slate-400 text-[10px] mb-1 font-semibold">{challenger.name} Oyun Sayısı:</div>
+                      <div className="flex gap-1">
+                        {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
+                          <button
+                            key={`s2-num-p1-${num}`}
+                            type="button"
+                            onClick={() => setSet2P1(num)}
+                            className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
+                              set2P1 === num
+                                ? 'bg-emerald-500 text-slate-950'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-[10px] mb-1 font-semibold">{defender.name} Oyun Sayısı:</div>
+                      <div className="flex gap-1">
+                        {[0, 1, 2, 3, 4, 5, 6, 7].map((num) => (
+                          <button
+                            key={`s2-num-p2-${num}`}
+                            type="button"
+                            onClick={() => setSet2P2(num)}
+                            className={`w-6 h-6 rounded font-mono font-bold text-[10px] transition cursor-pointer ${
+                              set2P2 === num
+                                ? 'bg-sky-500 text-slate-950'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Set 3 (10'lu Süper Tie-Break) */}
+              {((finishType === 'completed' && (isTied || hasThirdSet)) || (finishType === 'retired' && retiredStage === 'set3')) && (
+                <div className="p-3 bg-amber-950/30 rounded-xl border border-amber-600/50 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-300 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs">3</span>
+                      3. Set Karar Tie-Break (10 Puanlık)
+                    </span>
+                    <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-600">
+                      [{set3P1} - {set3P2}]
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="w-16 truncate font-semibold text-emerald-400">{challenger.name.split(' ')[0]} Kazandı:</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {[
+                          [10, 4], [10, 6], [10, 7], [10, 8], [11, 9], [12, 10]
+                        ].map(([p1g, p2g]) => (
+                          <button
+                            key={`s3-p1-${p1g}-${p2g}`}
+                            type="button"
+                            onClick={() => { setSet3P1(p1g); setSet3P2(p2g); }}
+                            className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
+                              set3P1 === p1g && set3P2 === p2g
+                                ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 shadow-md'
+                                : 'bg-slate-800 hover:bg-slate-700 text-amber-200 border border-slate-700'
+                            }`}
+                          >
+                            {p1g}-{p2g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="w-16 truncate font-semibold text-sky-400">{defender.name.split(' ')[0]} Kazandı:</span>
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {[
+                          [4, 10], [6, 10], [7, 10], [8, 10], [9, 11], [10, 12]
+                        ].map(([p1g, p2g]) => (
+                          <button
+                            key={`s3-p2-${p1g}-${p2g}`}
+                            type="button"
+                            onClick={() => { setSet3P1(p1g); setSet3P2(p2g); }}
+                            className={`px-2 py-1 rounded text-[11px] font-bold font-mono transition cursor-pointer ${
+                              set3P1 === p1g && set3P2 === p2g
+                                ? 'bg-sky-500 text-slate-950 ring-2 ring-sky-300 shadow-md'
+                                : 'bg-slate-800 hover:bg-slate-700 text-sky-200 border border-slate-700'
+                            }`}
+                          >
+                            {p1g}-{p2g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-amber-900/40 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[10px]">{challenger.name.split(' ')[0]}:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSet3P1(Math.max(0, set3P1 - 1))}
+                        className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono font-bold text-emerald-400 w-5 text-center">{set3P1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSet3P1(set3P1 + 1)}
+                        className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[10px]">{defender.name.split(' ')[0]}:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSet3P2(Math.max(0, set3P2 - 1))}
+                        className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono font-bold text-sky-400 w-5 text-center">{set3P2}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSet3P2(set3P2 + 1)}
+                        className="w-6 h-6 rounded bg-slate-800 text-slate-200 font-bold hover:bg-slate-700 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isTied && finishType === 'completed' && (
+                <div className="pt-1 flex items-center justify-end">
+                  <label className="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasThirdSet}
+                      onChange={(e) => setHasThirdSet(e.target.checked)}
+                      className="rounded bg-slate-800 border-slate-700 text-emerald-600"
+                    />
+                    <span>İsteğe bağlı 3. Set (10'lu Maç Tie-Break) Aç / Kapat</span>
+                  </label>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Winner Calculation Banner */}
@@ -751,12 +796,12 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
             </span>
           </div>
 
-          {/* Ranking impact preview based on rule 7 */}
+          {/* Ranking impact preview */}
           <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-[11px] text-slate-300">
             <span className="text-amber-400 font-semibold">Sıralama Etkisi (Madde 7): </span>
             {winner.id === challenger.id ? (
               <span>
-                Meydan okuyan <strong>{challenger.name}</strong> kazandığı için #{defender.rank} sıraya
+                Meydan okuyan <strong>{challenger.name}</strong> kazandığı için #{match.defenderRankAtMatch} sıraya
                 yükselecek, <strong>{defender.name}</strong> ve aradaki oyuncular 1 basamak aşağı kayacaktır.
               </span>
             ) : (
@@ -766,7 +811,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
             )}
           </div>
 
-          {/* Court Photo Upload / URL (Madde 13) */}
+          {/* Court Photo Upload / URL */}
           <div>
             <label className="block text-[11px] font-medium text-slate-400 mb-1 flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5 text-sky-400" />
@@ -781,39 +826,9 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({ isOpen, onClose, match }
             />
           </div>
 
-          {/* Two-way verification note */}
-          <div className="p-3 bg-sky-950/40 border border-sky-800/60 rounded-xl text-[11px] text-sky-200 leading-relaxed">
-            <strong>Çift Taraflı Onay Sistemi:</strong> Skoru kaydettiğinizde durum "Onay Bekliyor"
-            olarak işaretlenecektir. Kaybeden oyuncu sisteme girdiğinde skoru onayladığı anda defi
-            sıralaması resmi olarak yenilenecektir.
-          </div>
-
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <button
               onClick={() => handleSubmit(false)}
               disabled={!isParticipant}
-              className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition ${
-                isParticipant
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-slate-950 shadow-emerald-950/60 cursor-pointer'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Skoru İlet (Rakip Onayına Gönder)</span>
-            </button>
-
-            {isAdmin && (
-              <button
-                onClick={() => handleSubmit(true)}
-                className="py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-600 hover:bg-amber-500 text-slate-950 shadow transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
-              >
-                <span>Yönetici Doğrudan Onayla</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+              className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg

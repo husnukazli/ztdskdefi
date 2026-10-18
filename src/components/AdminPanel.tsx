@@ -54,6 +54,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     confirmScore,
     cancelMatch,
     deleteMatch,
+    updateMatchDetails,
     generateBulkPasswords,
     getFormattedPasswordListText,
     resetToDefaults,
@@ -72,15 +73,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [rowPasswords, setRowPasswords] = useState<{ [playerId: string]: string }>({});
   const [savedRowSuccess, setSavedRowSuccess] = useState<{ [playerId: string]: boolean }>({});
 
-  // Bulk password modal/popover & confirmation warning
+  // Bulk password modal/popover
   const [showBulkPasswordOptions, setShowBulkPasswordOptions] = useState<boolean>(false);
   const [bulkPinInput, setBulkPinInput] = useState<string>('1234');
-  const [pendingBulkPasswordAction, setPendingBulkPasswordAction] = useState<{
-    mode: 'random_pin' | 'common' | 'rank_pin';
-    commonPin?: string;
-    title: string;
-    description: string;
-  } | null>(null);
+  const [bulkPasswordMode, setBulkPasswordMode] = useState<'random_pin' | 'common' | 'rank_pin' | null>(null);
+  const [showBulkConfirmModal, setShowBulkConfirmModal] = useState<boolean>(false);
+  const [bulkConfirmText, setBulkConfirmText] = useState<string>('');
 
   // Add player form
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
@@ -100,6 +98,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
   const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
   const [showNonCompliantWarningModal, setShowNonCompliantWarningModal] = useState<boolean>(false);
+
+  // Eşleşme (Tarih, Saat, Kort, Not) Düzenleme State'leri
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState<string>('');
+  const [editTime, setEditTime] = useState<string>('');
+  const [editCourt, setEditCourt] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+
+  const handleStartEditMatch = (m: Match) => {
+    setEditingMatchId(m.id);
+    setEditDate(m.matchDate);
+    setEditTime(m.matchTime || '18:00');
+    setEditCourt(m.court || 'A Kortu (Sert Kort)');
+    setEditNotes(m.notes || '');
+  };
+
+  const handleSaveMatchDetails = (matchId: string) => {
+    updateMatchDetails(matchId, {
+      matchDate: editDate,
+      matchTime: editTime,
+      court: editCourt,
+      notes: editNotes,
+    });
+    setEditingMatchId(null);
+  };
 
   // Bulk Names text state
   const [bulkNamesText, setBulkNamesText] = useState<string>('');
@@ -263,53 +286,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setShowAddForm(false);
   };
 
-  const [draftOrderIds, setDraftPlayerOrder] = useState<string[] | null>(null);
-  const [isSavingRank, setIsSavingRank] = useState<boolean>(false);
-
-  const currentOrderIds = useMemo(() => {
-    return categoryPlayers.map((p) => p.id);
-  }, [categoryPlayers]);
-
-  const activeReorderIds = draftOrderIds !== null ? draftOrderIds : currentOrderIds;
-
-  const hasUnsavedRankChanges = useMemo(() => {
-    if (draftOrderIds === null) return false;
-    if (draftOrderIds.length !== currentOrderIds.length) return true;
-    return draftOrderIds.some((id, idx) => id !== currentOrderIds[idx]);
-  }, [draftOrderIds, currentOrderIds]);
-
-  const displayReorderPlayers = useMemo(() => {
-    return activeReorderIds
-      .map((id) => players.find((p) => p.id === id))
-      .filter((p): p is Player => !!p);
-  }, [activeReorderIds, players]);
-
   const moveRank = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= activeReorderIds.length) return;
+    if (targetIndex < 0 || targetIndex >= categoryPlayers.length) return;
 
-    const ids = [...activeReorderIds];
+    const ids = categoryPlayers.map((p) => p.id);
     const temp = ids[index];
     ids[index] = ids[targetIndex];
     ids[targetIndex] = temp;
 
-    setDraftPlayerOrder(ids);
-  };
-
-  const handleSaveReorderedRanks = async () => {
-    setIsSavingRank(true);
-    try {
-      reorderRanks(currentCategory, activeReorderIds);
-      setDraftPlayerOrder(null);
-      showToast('Yeni sıralama başarıyla kaydedildi ve tüm sisteme yansıtıldı!', 'success');
-    } finally {
-      setIsSavingRank(false);
-    }
-  };
-
-  const handleResetReorderedRanks = () => {
-    setDraftPlayerOrder(null);
-    showToast('Değişiklikler iptal edildi, mevcut sıralamaya dönüldü.', 'info');
+    reorderRanks(currentCategory, ids);
   };
 
   const handleBulkImport = () => {
@@ -421,6 +407,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  // Trigger Bulk Password modal with confirmation
+  const handleTriggerBulkPassword = (mode: 'random_pin' | 'common' | 'rank_pin') => {
+    setBulkPasswordMode(mode);
+    setBulkConfirmText('');
+    setShowBulkConfirmModal(true);
+  };
+
+  // Execute Bulk Password after safety check
+  const handleExecuteBulkPassword = () => {
+    if (!bulkPasswordMode) return;
+    if (bulkPasswordMode === 'common' && !bulkPinInput.trim()) {
+      showToast('Lütfen ortak şifre değerini boş bırakmayınız.', 'error');
+      return;
+    }
+
+    generateBulkPasswords(bulkPasswordMode, bulkPinInput.trim() || '1234');
+    setShowBulkConfirmModal(false);
+    setShowBulkPasswordOptions(false);
   };
 
   return (
@@ -617,25 +623,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className={`p-4 rounded-2xl border space-y-3 animate-fade-in text-xs ${
                 isLight ? 'bg-blue-50/60 border-blue-200 text-slate-900' : 'bg-slate-950 border-blue-500/40 text-slate-100'
               }`}>
-                <div className="flex items-center justify-between">
-                  <div className="font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                    <Key className="w-4 h-4 text-amber-500" />
-                    Tüm Üyeler İçin Toplu Şifre Belirleme
-                  </div>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold border border-amber-500/30">
-                    ⚠️ Tıklanınca hemen değişmez, önce onay penceresi açılır
-                  </span>
+                <div className="font-bold text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  Tüm Üyeler İçin Toplu Şifre Oluştur ve Kaydet
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className={`p-3 rounded-xl border space-y-2 ${
                     isLight ? 'bg-white border-blue-200' : 'bg-slate-900 border-slate-800'
                   }`}>
-                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>1. Tümüne Ortak Şifre</div>
-                    <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                      Tüm sporculara tek bir ortak PIN atar.
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Tümüne Ortak Şifre Belirle</div>
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={bulkPinInput}
@@ -648,67 +646,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         }`}
                       />
                       <button
-                        onClick={() => {
-                          if (bulkPinInput.trim()) {
-                            setPendingBulkPasswordAction({
-                              mode: 'common',
-                              commonPin: bulkPinInput.trim(),
-                              title: `Tüm Üyelere Ortak "${bulkPinInput.trim()}" Şifresi Belirleme`,
-                              description: `Sistemdeki 55 sporcunun (14 kadın, 41 erkek) tamamının giriş şifresi "${bulkPinInput.trim()}" olarak ayarlanacaktır.`,
-                            });
-                          }
-                        }}
+                        onClick={() => handleTriggerBulkPassword('common')}
                         className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs transition cursor-pointer"
                       >
-                        Seç (Onay İster)...
+                        Tümüne Ata
                       </button>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => {
-                      setPendingBulkPasswordAction({
-                        mode: 'rank_pin',
-                        title: 'Sıraya Göre Standart PIN (1001-1041, 2001-2014)',
-                        description: 'Tüm sporcuların şifreleri sıralama basamaklarına göre (Erkekler: 1001-1041, Kadınlar: 2001-2014) otomatik olarak güncellenecektir.',
-                      });
-                    }}
+                    onClick={() => handleTriggerBulkPassword('rank_pin')}
                     className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                       isLight
                         ? 'bg-white hover:bg-slate-50 border-blue-200'
                         : 'bg-slate-900 hover:bg-slate-800 border-slate-800'
                     }`}
                   >
-                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>2. Sıraya Göre PIN...</div>
+                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Sıraya Göre Standart PIN</div>
                     <div className={`text-[11px] mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                       Erkekler: 1001-1041, Kadınlar: 2001-2014
                     </div>
-                    <span className="inline-block mt-2 text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                      Seç (Onay İster) &rarr;
-                    </span>
                   </button>
 
                   <button
-                    onClick={() => {
-                      setPendingBulkPasswordAction({
-                        mode: 'random_pin',
-                        title: 'Her Sporcuya Rastgele 4 Haneli Yeni PIN',
-                        description: 'Tüm sporcular için birbirinden bağımsız rastgele 4 basamaklı güvenli PIN şifreleri üretilecektir.',
-                      });
-                    }}
+                    onClick={() => handleTriggerBulkPassword('random_pin')}
                     className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                       isLight
                         ? 'bg-white hover:bg-slate-50 border-blue-200'
                         : 'bg-slate-900 hover:bg-slate-800 border-slate-800'
                     }`}
                   >
-                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>3. Rastgele PIN Üret...</div>
+                    <div className={`font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Rastgele 4 Haneli PIN Üret</div>
                     <div className={`text-[11px] mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                       Her üyeye ayrı rastgele 4 haneli şifre
                     </div>
-                    <span className="inline-block mt-2 text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                      Seç (Onay İster) &rarr;
-                    </span>
                   </button>
                 </div>
               </div>
@@ -980,138 +951,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className={`lg:col-span-2 rounded-3xl p-5 sm:p-6 space-y-4 border shadow-sm transition-colors ${
             isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-slate-800 text-white'
           }`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className={`font-bold text-base ${isLight ? 'text-slate-950' : 'text-white'}`}>
-                  {currentCategory === 'men' ? 'Erkekler' : 'Kadınlar'} Sıralamasını Yeniden Düzenle
-                </h3>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                  Okları kullanarak sporcuların sırasını değiştirin. İşleminizi tamamlayınca aşağıdaki <strong>&quot;Yeni Sıralamayı Kaydet&quot;</strong> butonuna basınız.
-                </p>
-              </div>
-
-              {hasUnsavedRankChanges && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 animate-pulse">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Kaydedilmemiş Değişiklikler Var
-                </span>
-              )}
+            <div>
+              <h3 className={`font-bold text-base ${isLight ? 'text-slate-950' : 'text-white'}`}>
+                {currentCategory === 'men' ? 'Erkekler' : 'Kadınlar'} Sıralamasını Yeniden Düzenle
+              </h3>
+              <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                Okları kullanarak oyuncuların basamak sırasını değiştirebilirsiniz. Yapılan değişiklik anında kaydedilir.
+              </p>
             </div>
 
-            <div className={`divide-y rounded-2xl border max-h-[560px] overflow-y-auto ${
+            <div className={`divide-y rounded-2xl border max-h-[600px] overflow-y-auto ${
               isLight ? 'bg-white divide-slate-200 border-slate-200' : 'bg-slate-950 divide-slate-800 border-slate-800'
             }`}>
-              {displayReorderPlayers.map((player, index) => {
-                const draftRank = index + 1;
-                const isRankChanged = player.rank !== draftRank;
-
-                return (
-                  <div key={player.id} className={`p-3 flex items-center justify-between transition ${
-                    isRankChanged
-                      ? isLight ? 'bg-amber-50/60' : 'bg-amber-950/25'
-                      : isLight ? 'hover:bg-blue-50/50' : 'hover:bg-slate-900/60'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`w-8 h-8 rounded-lg font-bold flex items-center justify-center text-xs font-mono transition ${
-                        isRankChanged
-                          ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300'
-                          : isLight ? 'bg-blue-100 text-blue-900 border border-blue-200' : 'bg-slate-800 text-blue-300'
-                      }`}>
-                        #{draftRank}
-                      </span>
-                      <div>
-                        <span className={`font-bold text-xs sm:text-sm ${isLight ? 'text-slate-950' : 'text-white'}`}>
-                          {player.name}
-                        </span>
-                        {isRankChanged && (
-                          <span className="text-[10px] text-amber-500 font-medium block">
-                            (Önceki: #{player.rank})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveRank(index, 'up')}
-                        disabled={index === 0}
-                        className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-25 disabled:pointer-events-none ${
-                          isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                        }`}
-                        title="Yukarı Taşı"
-                      >
-                        <ArrowUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveRank(index, 'down')}
-                        disabled={index === displayReorderPlayers.length - 1}
-                        className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-25 disabled:pointer-events-none ${
-                          isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                        }`}
-                        title="Aşağı Taşı"
-                      >
-                        <ArrowDown className="w-4 h-4" />
-                      </button>
-                    </div>
+              {categoryPlayers.map((player, index) => (
+                <div key={player.id} className={`p-3 flex items-center justify-between transition ${
+                  isLight ? 'hover:bg-blue-50/50' : 'hover:bg-slate-900/60'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center text-xs font-mono ${
+                      isLight ? 'bg-blue-100 text-blue-900 border border-blue-200' : 'bg-slate-800 text-blue-300'
+                    }`}>
+                      #{player.rank}
+                    </span>
+                    {/* Player Name: High contrast in daylight mode */}
+                    <span className={`font-bold text-xs sm:text-sm ${isLight ? 'text-slate-950' : 'text-white'}`}>
+                      {player.name}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
 
-            {/* Bottom Action Bar: Prominent 'Yeni Sıralamayı Kaydet' Button */}
-            <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${
-              hasUnsavedRankChanges
-                ? isLight ? 'bg-amber-50 border-amber-300' : 'bg-amber-950/40 border-amber-500/50'
-                : isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
-            }`}>
-              <div className="flex items-center gap-2 text-xs">
-                {hasUnsavedRankChanges ? (
-                  <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
-                    Sıralama sırası değiştirildi. Onaylamak için lütfen kaydediniz.
-                  </span>
-                ) : (
-                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-medium">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    Sıralama şu anda güncel ve veritabanına kayıtlıdır.
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                {hasUnsavedRankChanges && (
-                  <button
-                    type="button"
-                    onClick={handleResetReorderedRanks}
-                    className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                      isLight ? 'bg-slate-200 hover:bg-slate-300 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    Vazgeç / İptal
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSaveReorderedRanks}
-                  disabled={isSavingRank}
-                  className="flex-1 sm:flex-initial px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2"
-                >
-                  {isSavingRank ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Kaydediliyor...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      <span>Yeni Sıralamayı Kaydet</span>
-                    </>
-                  )}
-                </button>
-              </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => moveRank(index, 'up')}
+                      disabled={index === 0}
+                      className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-25 disabled:pointer-events-none ${
+                        isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      }`}
+                      title="Yukarı Taşı"
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => moveRank(index, 'down')}
+                      disabled={index === categoryPlayers.length - 1}
+                      className={`p-1.5 rounded-lg transition cursor-pointer disabled:opacity-25 disabled:pointer-events-none ${
+                        isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      }`}
+                      title="Aşağı Taşı"
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1378,6 +1269,85 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   const p1 = players.find((p) => p.id === m.challengerId);
                   const p2 = players.find((p) => p.id === m.defenderId);
 
+                  // DÜZENLEME FORMU AÇIKSA GÖSTERİLECEK PANEL
+                  if (editingMatchId === m.id) {
+                    return (
+                      <div
+                        key={m.id}
+                        className={`p-4 rounded-2xl border flex flex-col gap-3 text-xs shadow-md ${
+                          isLight ? 'bg-blue-50/80 border-blue-300 text-slate-900' : 'bg-slate-900 border-blue-500/60 text-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-bold text-sm">
+                          <span className="text-blue-600 dark:text-blue-400">
+                            Eşleşme Bilgilerini Düzenle: {p1?.name} vs {p2?.name}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Tarih</label>
+                            <input
+                              type="date"
+                              value={editDate}
+                              onChange={(e) => setEditDate(e.target.value)}
+                              className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-medium"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Saat</label>
+                            <input
+                              type="time"
+                              value={editTime}
+                              onChange={(e) => setEditTime(e.target.value)}
+                              className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-medium"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Kort</label>
+                            <select
+                              value={editCourt}
+                              onChange={(e) => setEditCourt(e.target.value)}
+                              className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white font-medium"
+                            >
+                              <option value="A Kortu (Sert Kort)">A Kortu (Sert Kort)</option>
+                              <option value="B Kortu (Sert Kort)">B Kortu (Sert Kort)</option>
+                              <option value="C Kortu (Sert Kort)">C Kortu (Sert Kort)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Not / Açıklama</label>
+                          <input
+                            type="text"
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                            placeholder="Maç notları, top markası vb."
+                            className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1 border-t border-slate-700/50">
+                          <button
+                            type="button"
+                            onClick={() => setEditingMatchId(null)}
+                            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer"
+                          >
+                            Vazgeç
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveMatchDetails(m.id)}
+                            className="px-5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer shadow"
+                          >
+                            Kaydet
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={m.id}
@@ -1427,6 +1397,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0">
+                        {/* 1. Tarih / Saat / Kort Düzeltme Butonu */}
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditMatch(m)}
+                          className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 transition cursor-pointer shadow-xs ${
+                            isLight
+                              ? 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-300'
+                              : 'bg-blue-950/60 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-800'
+                          }`}
+                          title="Tarih, Saat veya Kort Bilgilerini Düzelt"
+                        >
+                          <span>Düzenle</span>
+                        </button>
+
+                        {/* 2. Oynanmamış maçlar için Skor Gir */}
                         {m.status === 'scheduled' && (
                           <button
                             onClick={() => onOpenScoreModal(m)}
@@ -1436,6 +1421,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
                         )}
 
+                        {/* 3. Onaylanmış maçlar için Skoru Düzelt */}
+                        {m.status === 'confirmed' && (
+                          <button
+                            onClick={() => onOpenScoreModal(m)}
+                            className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer shadow-xs ${
+                              isLight
+                                ? 'bg-amber-50 text-amber-800 hover:bg-amber-600 hover:text-white border border-amber-300'
+                                : 'bg-amber-950/60 text-amber-300 hover:bg-amber-600 hover:text-white border border-amber-800'
+                            }`}
+                            title="Yanlış girilen skoru düzelt (Sıralama otomatik revize edilir)"
+                          >
+                            Skoru Düzelt
+                          </button>
+                        )}
+
+                        {/* 4. Bekleyen skorları onayla */}
                         {m.status === 'score_submitted' && (
                           <button
                             onClick={() => confirmScore(m.id)}
@@ -1445,7 +1446,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
                         )}
 
-                        {/* Safe Delete / Cancel Match Button */}
+                        {/* 5. Silme butonu */}
                         <button
                           onClick={() => setMatchToDelete(m)}
                           className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
@@ -1758,55 +1759,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* 4. TURNUVA SIFIRLAMA ÇİFT ONAY MODALI */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className={`w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 border-2 border-rose-600 ${
+          <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 border-2 border-rose-600 ${
             isLight ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'
           }`}>
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-500 border border-rose-500/30 flex items-center justify-center shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-rose-500">
-                  DİKKAT: GERİ ALINAMAZ İŞLEM
-                </span>
+              <div>
                 <h3 className={`text-base font-bold ${isLight ? 'text-slate-950' : 'text-white'}`}>
-                  Turnuva & Lig Verilerini Sıfırlama
+                  Turnuvayı Sıfırlamak Üzeresiniz!
                 </h3>
+                <p className={`text-xs mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Bu işlem geri alınamaz. Tüm özel şifreler, maç sonuçları ve sıralama puanları başlangıç durumuna dönecektir.
+                </p>
               </div>
             </div>
 
-            <div className={`p-3.5 rounded-2xl text-xs border space-y-2 ${
-              isLight ? 'bg-rose-50 border-rose-200 text-rose-950' : 'bg-rose-950/40 border-rose-800/60 text-rose-200'
-            }`}>
-              <div className="font-bold">Bu işlem sonucunda aşağıdaki tüm veriler sıfırlanacaktır:</div>
-              <ul className="list-disc list-inside space-y-1 text-[11px] leading-relaxed">
-                <li><strong>Tüm Maçlar:</strong> Oynanmış veya planlanmış tüm maç kayıtları ve skorlar hem yerelden hem Firestore bulut veritabanından tamamen silinir.</li>
-                <li><strong>Sıralama:</strong> Sezonun ilk günkü başlangıç sıralamasına (Erkekler: 1-41, Kadınlar: 1-14) geri döner.</li>
-                <li><strong>İstatistikler:</strong> Tüm oyuncuların maç, galibiyet ve mağlubiyet sayıları sıfırlanır (0 maç).</li>
-                <li><strong>Mazeretler:</strong> Bildirilmiş tüm izinler ve mazeretler kaldırılır.</li>
-                <li><strong>Play-Off Kuraları:</strong> Çekilmiş olan tüm 1. tur kura sonuçları temizlenir.</li>
-              </ul>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between">
-                <label className={`block text-xs font-semibold ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>
-                  Onaylamak için lütfen aşağıdaki kutuya <strong className="text-rose-600 font-mono">SIFIRLA</strong> yazınız:
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setResetConfirmText('SIFIRLA')}
-                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
-                >
-                  Otomatik Yaz: SIFIRLA
-                </button>
-              </div>
+            <div className="space-y-2 pt-2">
+              <label className={`block text-xs font-semibold ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>
+                Onaylamak için lütfen aşağıdaki kutuya <strong className="text-rose-600 font-mono">SIFIRLA</strong> yazınız:
+              </label>
               <input
                 type="text"
                 value={resetConfirmText}
                 onChange={(e) => setResetConfirmText(e.target.value)}
                 placeholder="SIFIRLA"
-                disabled={isResetting}
                 className={`w-full rounded-xl p-2.5 text-xs font-mono uppercase border ${
                   isLight
                     ? 'bg-slate-50 border-slate-300 text-slate-950 font-bold focus:border-rose-500'
@@ -1815,42 +1793,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               />
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-2">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                disabled={isResetting}
                 onClick={() => setShowResetModal(false)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${
                   isLight ? 'bg-slate-200 text-slate-800 hover:bg-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                 }`}
               >
-                Vazgeç / İptal
+                Vazgeç
               </button>
               <button
                 type="button"
-                disabled={
-                  !['SIFIRLA', 'sıfırla', 'sifirla', 'SİFİRLA', 'Sıfırla', 'Sifirla'].includes(resetConfirmText.trim()) &&
-                  resetConfirmText.trim().toUpperCase() !== 'SIFIRLA' ||
-                  isResetting
-                }
+                disabled={resetConfirmText.trim().toUpperCase() !== 'SIFIRLA' || isResetting}
                 onClick={async () => {
                   setIsResetting(true);
                   await resetToDefaults();
                   setIsResetting(false);
                   setShowResetModal(false);
                 }}
-                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl text-xs transition cursor-pointer shadow flex items-center gap-1.5"
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl text-xs transition cursor-pointer shadow flex items-center justify-center gap-1.5"
               >
                 {isResetting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     <span>Sıfırlanıyor...</span>
                   </>
                 ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Evet, Sıfırla</span>
-                  </>
+                  <span>Evet, Sıfırla</span>
                 )}
               </button>
             </div>
@@ -1859,62 +1829,73 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* 5. TOPLU ŞİFRE DEĞİŞTİRME UYARI VE ONAY MODALI */}
-      {pendingBulkPasswordAction && (
+      {showBulkConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
           <div className={`w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 border-2 border-amber-500 ${
             isLight ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'
           }`}>
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6" />
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 animate-pulse" />
               </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-500">
-                  ⚠️ DİKKAT: TOPLU ŞİFRE DEĞİŞİKLİĞİ ONAYI
-                </span>
+              <div>
                 <h3 className={`text-base font-bold ${isLight ? 'text-slate-950' : 'text-white'}`}>
-                  {pendingBulkPasswordAction.title}
+                  Toplu Şifre Değiştirme Onayı
                 </h3>
+                <p className={`text-xs mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Bu işlem ligdeki tüm sporcuların giriş şifrelerini kalıcı olarak değiştirecektir.
+                </p>
               </div>
             </div>
 
-            <p className={`text-xs leading-relaxed ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
-              {pendingBulkPasswordAction.description}
-            </p>
-
-            <div className={`p-3.5 rounded-2xl text-xs border space-y-1.5 ${
-              isLight ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-amber-950/60 border-amber-700 text-amber-200'
+            <div className={`p-3.5 rounded-2xl border text-xs space-y-1.5 ${
+              isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-950/40 border-amber-800 text-amber-200'
             }`}>
-              <div className="font-bold flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                <Key className="w-4 h-4 shrink-0" />
-                <span>Bu işlem tüm oyuncuların şifrelerini değiştirir!</span>
+              <div className="font-bold flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-amber-500" />
+                <span>Uygulanacak Şifre Modu:</span>
               </div>
-              <div className="text-[11px] leading-relaxed">
-                Yanlışlıkla bastıysanız hiçbir değişiklik yapılmaması için lütfen <strong>&quot;Vazgeç / İptal&quot;</strong> butonuna basınız. Onaylarsanız yeni şifre listesini oyuncularla paylaşmanız gerekecektir.
-              </div>
+              <p className="font-semibold text-slate-800 dark:text-slate-100">
+                {bulkPasswordMode === 'common' && `Tüm üyelere tek ortak şifre: "${bulkPinInput}"`}
+                {bulkPasswordMode === 'rank_pin' && 'Sıraya göre standart şifreler (Erkekler: 1001-1041, Kadınlar: 2001-2014)'}
+                {bulkPasswordMode === 'random_pin' && 'Her üyeye rastgele ve benzersiz 4 basamaklı yeni PIN'}
+              </p>
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-2">
+            <div className="space-y-2 pt-1">
+              <label className={`block text-xs font-semibold ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>
+                Onaylamak için lütfen kutuya <strong className="text-amber-600 font-mono">DEGISTIR</strong> yazınız:
+              </label>
+              <input
+                type="text"
+                value={bulkConfirmText}
+                onChange={(e) => setBulkConfirmText(e.target.value)}
+                placeholder="DEGISTIR"
+                className={`w-full rounded-xl p-2.5 text-xs font-mono uppercase border ${
+                  isLight
+                    ? 'bg-slate-50 border-slate-300 text-slate-950 font-bold focus:border-amber-500'
+                    : 'bg-slate-950 border-slate-700 text-white focus:border-amber-500'
+                }`}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setPendingBulkPasswordAction(null)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                onClick={() => setShowBulkConfirmModal(false)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${
                   isLight ? 'bg-slate-200 text-slate-800 hover:bg-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                 }`}
               >
-                Vazgeç / İptal (Değişiklik Yapma)
+                Vazgeç
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  generateBulkPasswords(pendingBulkPasswordAction.mode, pendingBulkPasswordAction.commonPin);
-                  setShowBulkPasswordOptions(false);
-                  setPendingBulkPasswordAction(null);
-                }}
-                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-xl text-xs transition cursor-pointer shadow-lg shadow-amber-950/60 flex items-center gap-1.5"
+                disabled={bulkConfirmText.trim().toUpperCase() !== 'DEGISTIR'}
+                onClick={handleExecuteBulkPassword}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl text-xs transition cursor-pointer shadow"
               >
-                <Check className="w-4 h-4" />
-                <span>Evet, Şifreleri Değiştir</span>
+                Evet, Şifreleri Güncelle
               </button>
             </div>
           </div>
